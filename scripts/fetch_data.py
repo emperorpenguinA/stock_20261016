@@ -15,8 +15,9 @@ import json
 import math
 import random
 import sys
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parent.parent
 TICKERS_FILE = ROOT / "config" / "tickers.json"
@@ -46,6 +47,23 @@ def to_rows(df) -> list[list]:
     ]
 
 
+# 引け後とみなす現地時刻。これより前に取得した当日の日足は確定前なので捨てる。
+MARKET_CLOSE = {
+    "JP": (ZoneInfo("Asia/Tokyo"), time(15, 45)),
+    "US": (ZoneInfo("America/New_York"), time(16, 15)),
+}
+
+
+def drop_unfinished_bar(rows: list[list], market: str) -> list[list]:
+    if not rows or market not in MARKET_CLOSE:
+        return rows
+    tz, close_at = MARKET_CLOSE[market]
+    now = datetime.now(tz)
+    if rows[-1][0] == now.date().isoformat() and now.time() < close_at:
+        return rows[:-1]
+    return rows
+
+
 def fetch_real(tickers: list[dict]) -> list[dict]:
     import yfinance as yf
 
@@ -57,6 +75,7 @@ def fetch_real(tickers: list[dict]) -> list[dict]:
             ticker = yf.Ticker(symbol)
             for key, (interval, period) in INTERVALS.items():
                 stock[key] = to_rows(ticker.history(period=period, interval=interval, auto_adjust=True))
+            stock["daily"] = drop_unfinished_bar(stock["daily"], t["market"])
         except Exception as e:  # noqa: BLE001 - 1銘柄の失敗で全体を止めない
             print(f"[warn] {symbol}: {e}", file=sys.stderr)
             continue

@@ -266,10 +266,10 @@
   }
 
   function rating(score) {
-    if (score >= 70) return { key: "strong-buy", label: "強い買い" };
-    if (score >= 58) return { key: "buy", label: "買い" };
-    if (score >= 42) return { key: "hold", label: "様子見" };
-    if (score >= 30) return { key: "sell", label: "売り" };
+    if (score >= 80) return { key: "strong-buy", label: "強い買い" };
+    if (score >= 62) return { key: "buy", label: "買い" };
+    if (score >= 40) return { key: "hold", label: "様子見" };
+    if (score >= 25) return { key: "sell", label: "売り" };
     return { key: "strong-sell", label: "強い売り" };
   }
 
@@ -295,7 +295,7 @@
     const add = (category, points, text) => signals.push({ category, points, text });
 
     // 1) 月足・週足で大きなトレンドを確認する
-    for (const [key, size] of [["monthly", 10], ["weekly", 10]]) {
+    for (const [key, size] of [["monthly", 6], ["weekly", 6]]) {
       const t = tfs[key].trend;
       const label = TIMEFRAMES[key].label;
       const midN = TIMEFRAMES[key].ma[1];
@@ -303,8 +303,8 @@
       if (t.dir > 0) add("longterm", size, `${label}が上昇トレンド: ${t.text}`);
       else if (t.dir < 0) add("longterm", -size, `${label}が下落トレンド: ${t.text}`);
       else add("longterm", 0, `${label}はもみ合い`);
-      if (t.maUp && t.aboveMid) add("longterm", 4, `${label}の${midN}${TIMEFRAMES[key].unit}線が上向き (相場全体が上昇基調で勝率が上がりやすい)`);
-      else if (t.maDown && !t.aboveMid) add("longterm", -4, `${label}の${midN}${TIMEFRAMES[key].unit}線が下向き`);
+      if (t.maUp && t.aboveMid) add("longterm", 2, `${label}の${midN}${TIMEFRAMES[key].unit}線が上向き (相場全体が上昇基調で勝率が上がりやすい)`);
+      else if (t.maDown && !t.aboveMid) add("longterm", -2, `${label}の${midN}${TIMEFRAMES[key].unit}線が下向き`);
     }
 
     // 2) ローソク足: 高値・安値、抵抗線/サポートライン、ボックス、安値切り上がり、ヒゲ
@@ -313,8 +313,8 @@
       add("candle", 10, `日足が直近の高値 ${fmt(dt.lastHigh.price)} を上抜け (新たな上昇トレンド)`);
     } else if (dt.lastLow && close < dt.lastLow.price && prevClose >= dt.lastLow.price) {
       add("candle", -10, `日足が直近の安値 ${fmt(dt.lastLow.price)} を下抜け (下落トレンド入り)`);
-    } else if (dt.dir > 0) add("candle", 5, `日足: ${dt.text}`);
-    else if (dt.dir < 0) add("candle", -5, `日足: ${dt.text}`);
+    } else if (dt.dir > 0) add("candle", 3, `日足: ${dt.text}`);
+    else if (dt.dir < 0) add("candle", -3, `日足: ${dt.text}`);
 
     const box = D.box;
     if (box) {
@@ -340,10 +340,16 @@
     const highs = D.swings.highs.slice(-3);
     if (lows.length >= 2 && lows[lows.length - 1].price > lows[lows.length - 2].price && close > lows[lows.length - 1].price) {
       const three = lows.length === 3 && lows[1].price > lows[0].price;
-      add("candle", three ? 10 : 7, `安値切り上がり (${lows.map((p) => fmt(p.price)).join(" → ")})`);
-      patterns.push("安値切り上がり");
+      const text = `安値切り上がり (${lows.map((p) => fmt(p.price)).join(" → ")})`;
+      // 切り上がった安値が確定した直後が買い時。時間が経っていれば状態として小さく加点する
+      if (L - lows[lows.length - 1].i <= 15) {
+        add("candle", three ? 10 : 8, `${text}: 切り上がりが確認できた直後`);
+        patterns.push("安値切り上がり");
+      } else {
+        add("candle", 3, text);
+      }
     } else if (highs.length >= 2 && highs[highs.length - 1].price < highs[highs.length - 2].price && close < highs[highs.length - 1].price) {
-      add("candle", -6, `高値切り下がり (${highs.slice(-2).map((p) => fmt(p.price)).join(" → ")})`);
+      add("candle", -4, `高値切り下がり (${highs.slice(-2).map((p) => fmt(p.price)).join(" → ")})`);
     }
 
     const b = bars[L];
@@ -365,12 +371,12 @@
       const crossedDown = close < s5[L] && [1, 2].some((i) => bars[L - i].close >= s5[L - i]);
       if (crossedUp && slope >= -0.002) add("ma", 10, "5日線が横ばい〜上向きの中、株価が5日線を上抜け (買い時サイン)");
       else if (crossedDown && slope <= 0.002) add("ma", -10, "5日線が横ばい〜下向きの中、株価が5日線を下抜け (売り時サイン)");
-      else if (close > s5[L] && slope > 0) add("ma", 3, "株価が上向きの5日線の上で推移");
-      else if (close < s5[L] && slope < 0) add("ma", -3, "株価が下向きの5日線の下で推移");
+      else if (close > s5[L] && slope > 0) add("ma", 2, "株価が上向きの5日線の上で推移");
+      else if (close < s5[L] && slope < 0) add("ma", -2, "株価が下向きの5日線の下で推移");
     }
     if (s25[L] != null && s75[L] != null) {
-      if (s5[L] > s25[L] && s25[L] > s75[L]) add("ma", 8, "パーフェクトオーダー (5日 > 25日 > 75日)");
-      else if (s5[L] < s25[L] && s25[L] < s75[L]) add("ma", -8, "逆パーフェクトオーダー (5日 < 25日 < 75日)");
+      if (s5[L] > s25[L] && s25[L] > s75[L]) add("ma", 4, "パーフェクトオーダー (5日 > 25日 > 75日)");
+      else if (s5[L] < s25[L] && s25[L] < s75[L]) add("ma", -4, "逆パーフェクトオーダー (5日 < 25日 < 75日)");
     }
     const gc = recentCross(s5, s25, 5);
     if (gc) {
@@ -391,8 +397,8 @@
     }
     const prof = D.profile;
     if (prof) {
-      if (close > prof.poc.high) add("volume", 7, `出来高が多い価格帯 (${fmt(prof.poc.price)}付近) より株価が上: 上値が軽い`);
-      else if (close < prof.poc.low) add("volume", -7, `出来高が多い価格帯 (${fmt(prof.poc.price)}付近) より株価が下: やれやれ売りが出やすい`);
+      if (close > prof.poc.high) add("volume", 4, `出来高が多い価格帯 (${fmt(prof.poc.price)}付近) より株価が上: 上値が軽い`);
+      else if (close < prof.poc.low) add("volume", -5, `出来高が多い価格帯 (${fmt(prof.poc.price)}付近) より株価が下: やれやれ売りが出やすい`);
       else add("volume", 0, `出来高が多い価格帯 (${fmt(prof.poc.price)}付近) の中で推移`);
     }
 
@@ -415,7 +421,8 @@
       s.weighted = s.points * style.weights[s.category];
       raw += s.weighted;
     }
-    const score = Math.max(0, Math.min(100, Math.round(50 + (raw * 50) / 80)));
+    // 加点が重なるほど伸びが緩やかになるようにし、100点に張り付かないようにする
+    const score = Math.round(50 + 50 * Math.tanh(raw / 65));
     const order = Object.keys(CATEGORY_LABELS);
     signals.sort((a, b) => order.indexOf(a.category) - order.indexOf(b.category) || Math.abs(b.weighted) - Math.abs(a.weighted));
 
