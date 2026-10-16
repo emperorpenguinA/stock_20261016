@@ -32,6 +32,8 @@
 1. リポジトリの **Settings → Pages → Build and deployment → Source** を「GitHub Actions」にする
 2. **Actions → 株価データ更新 → Run workflow** を実行する
 
+Pages を有効にする前にワークフローが動くと、`deploy` ジョブが `Get Pages site failed ... Not Found` で失敗します (株価データの取得・コミットを行う `update` ジョブは影響を受けません)。上記 1 の設定後に再実行してください。
+
 ワークフローは Yahoo Finance (yfinance) から日足 (1年)・週足 (5年)・月足 (10年) を取得して `docs/data/prices.json` をコミットし、`docs/` を Pages に公開します。平日は東証・米国市場の引け後に自動で更新されます。
 
 初期状態の `prices.json` はデモ用の疑似データで、ページ上部に注意が表示されます。

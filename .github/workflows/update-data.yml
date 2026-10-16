@@ -8,43 +8,54 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ["docs/**", "config/**", "scripts/**"]
-
-permissions:
-  contents: write
-  pages: write
-  id-token: write
+    paths: ["docs/**", "config/**", "scripts/**", ".github/workflows/update-data.yml"]
 
 concurrency:
   group: update-data
   cancel-in-progress: false
 
 jobs:
+  # 株価を取得して docs/data/prices.json をコミットする
   update:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
       - name: 株価を取得
-        if: github.event_name != 'push'
         run: python scripts/fetch_data.py
       - name: データをコミット
-        if: github.event_name != 'push'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs/data/prices.json
-          git diff --cached --quiet || git commit -m "株価データを更新 ($(date -u +%Y-%m-%d))"
-          git push
+          git diff --cached --quiet && exit 0
+          git commit -m "株価データを更新 ($(date -u +%Y-%m-%d))"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+  # docs/ を GitHub Pages に公開する
+  # (リポジトリの Settings → Pages → Source を「GitHub Actions」にしておく必要がある)
+  deploy:
+    needs: update
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref_name }}
       - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v4
         with:
           path: docs
       - id: deploy
         uses: actions/deploy-pages@v4
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
