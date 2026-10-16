@@ -1,0 +1,50 @@
+name: 株価データ更新
+
+on:
+  schedule:
+    # 東証の引け後 (16:10 JST) と米国市場の引け後 (06:40 JST)
+    - cron: "10 7 * * 1-5"
+    - cron: "40 21 * * 1-5"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["docs/**", "config/**", "scripts/**"]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: 株価を取得
+        if: github.event_name != 'push'
+        run: python scripts/fetch_data.py
+      - name: データをコミット
+        if: github.event_name != 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/data/prices.json
+          git diff --cached --quiet || git commit -m "株価データを更新 ($(date -u +%Y-%m-%d))"
+          git push
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - id: deploy
+        uses: actions/deploy-pages@v4
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
