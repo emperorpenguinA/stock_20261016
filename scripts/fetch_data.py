@@ -47,21 +47,40 @@ def to_rows(df) -> list[list]:
     ]
 
 
-# 引け後とみなす現地時刻。これより前に取得した当日の日足は確定前なので捨てる。
-MARKET_CLOSE = {
-    "JP": (ZoneInfo("Asia/Tokyo"), time(15, 45)),
-    "US": (ZoneInfo("America/New_York"), time(16, 15)),
+# 取引所の現地時刻での取引時間 (引けは少し余裕を持たせる)
+MARKET_HOURS = {
+    "JP": (ZoneInfo("Asia/Tokyo"), time(9, 0), time(15, 45)),
+    "US": (ZoneInfo("America/New_York"), time(9, 30), time(16, 15)),
 }
 
 
-def drop_unfinished_bar(rows: list[list], market: str) -> list[list]:
-    if not rows or market not in MARKET_CLOSE:
+def previous_weekday(d: date) -> date:
+    d -= timedelta(days=1)
+    while d.weekday() >= 5:
+        d -= timedelta(days=1)
+    return d
+
+
+def fix_last_bar(rows: list[list], market: str, now: datetime | None = None) -> list[list]:
+    """取得時刻に合わせて最後の日足を直す。
+
+    - 取引時間中に取得した当日の足は確定前なので捨てる。
+    - 寄り付き前 (日付が変わった直後など) は、Yahoo が前の取引日の足に当日の日付を
+      付けて返すことがあるため、前の取引日の日付に付け直す。
+    """
+    if not rows or market not in MARKET_HOURS:
         return rows
-    tz, close_at = MARKET_CLOSE[market]
-    now = datetime.now(tz)
-    if rows[-1][0] == now.date().isoformat() and now.time() < close_at:
+    tz, open_at, close_at = MARKET_HOURS[market]
+    now = (now or datetime.now(tz)).astimezone(tz)
+    today = now.date()
+    if rows[-1][0] != today.isoformat() or now.time() >= close_at:
+        return rows
+    if now.time() >= open_at:
         return rows[:-1]
-    return rows
+    prev = previous_weekday(today).isoformat()
+    if len(rows) >= 2 and rows[-2][0] >= prev:
+        return rows[:-1]
+    return rows[:-1] + [[prev, *rows[-1][1:]]]
 
 
 def fetch_real(tickers: list[dict]) -> list[dict]:
@@ -75,7 +94,7 @@ def fetch_real(tickers: list[dict]) -> list[dict]:
             ticker = yf.Ticker(symbol)
             for key, (interval, period) in INTERVALS.items():
                 stock[key] = to_rows(ticker.history(period=period, interval=interval, auto_adjust=True))
-            stock["daily"] = drop_unfinished_bar(stock["daily"], t["market"])
+            stock["daily"] = fix_last_bar(stock["daily"], t["market"])
         except Exception as e:  # noqa: BLE001 - 1銘柄の失敗で全体を止めない
             print(f"[warn] {symbol}: {e}", file=sys.stderr)
             continue
