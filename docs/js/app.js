@@ -57,7 +57,7 @@
 
   // ---- 描画: 注目銘柄・ランキング ----
   function renderPicks() {
-    const top = visibleResults().filter((x) => x.result.score >= 58).slice(0, 3);
+    const top = visibleResults().filter((x) => x.result.score >= 62).slice(0, 3);
     const el = $("picks");
     if (!top.length) {
       el.innerHTML = `<p class="muted">現在の条件では「買い」以上の銘柄はありません。様子見が無難な地合いです。</p>`;
