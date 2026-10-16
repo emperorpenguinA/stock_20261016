@@ -54,33 +54,42 @@ MARKET_HOURS = {
 }
 
 
-def previous_weekday(d: date) -> date:
-    d -= timedelta(days=1)
-    while d.weekday() >= 5:
-        d -= timedelta(days=1)
-    return d
-
-
-def fix_last_bar(rows: list[list], market: str, now: datetime | None = None) -> list[list]:
-    """取得時刻に合わせて最後の日足を直す。
-
-    - 取引時間中に取得した当日の足は確定前なので捨てる。
-    - 寄り付き前 (日付が変わった直後など) は、Yahoo が前の取引日の足に当日の日付を
-      付けて返すことがあるため、前の取引日の日付に付け直す。
-    """
+def drop_unfinished_bar(rows: list[list], market: str, now: datetime | None = None) -> list[list]:
+    """当日の日足は、取引時間中 (寄り付き〜引け) に取得した場合は確定前なので捨てる。"""
     if not rows or market not in MARKET_HOURS:
         return rows
     tz, open_at, close_at = MARKET_HOURS[market]
     now = (now or datetime.now(tz)).astimezone(tz)
-    today = now.date()
-    if rows[-1][0] != today.isoformat() or now.time() >= close_at:
-        return rows
-    if now.time() >= open_at:
+    if rows[-1][0] == now.date().isoformat() and open_at <= now.time() < close_at:
         return rows[:-1]
-    prev = previous_weekday(today).isoformat()
-    if len(rows) >= 2 and rows[-2][0] >= prev:
-        return rows[:-1]
-    return rows[:-1] + [[prev, *rows[-1][1:]]]
+    return rows
+
+
+def fill_missing_daily(ticker, df):
+    """直近の日足で始値〜終値が欠けている行を、その日の1時間足から作り直す。
+
+    日本株は日付が変わった直後などに、Yahoo が前の取引日の日足を出来高だけ入った状態
+    (始値〜終値が NaN) で返すことがある。そのまま捨てると最新の取引日が欠けてしまう。
+    """
+    price_cols = ["Open", "High", "Low", "Close"]
+    recent = df.tail(5)
+    missing = recent.index[recent[price_cols].isna().all(axis=1)]
+    if len(missing) == 0:
+        return df
+    hourly = ticker.history(period="5d", interval="1h", auto_adjust=True).dropna(subset=price_cols)
+    df = df.copy()
+    for idx in missing:
+        day = hourly[hourly.index.date == idx.date()]
+        if day.empty:
+            continue
+        df.loc[idx, "Open"] = day["Open"].iloc[0]
+        df.loc[idx, "High"] = day["High"].max()
+        df.loc[idx, "Low"] = day["Low"].min()
+        df.loc[idx, "Close"] = day["Close"].iloc[-1]
+        if not df.loc[idx, "Volume"] > 0:
+            df.loc[idx, "Volume"] = day["Volume"].sum()
+        print(f"[fix] {ticker.ticker} {idx.date()}: 欠けていた日足を1時間足から補完")
+    return df
 
 
 def fetch_real(tickers: list[dict]) -> list[dict]:
@@ -93,8 +102,11 @@ def fetch_real(tickers: list[dict]) -> list[dict]:
         try:
             ticker = yf.Ticker(symbol)
             for key, (interval, period) in INTERVALS.items():
-                stock[key] = to_rows(ticker.history(period=period, interval=interval, auto_adjust=True))
-            stock["daily"] = fix_last_bar(stock["daily"], t["market"])
+                df = ticker.history(period=period, interval=interval, auto_adjust=True)
+                if key == "daily":
+                    df = fill_missing_daily(ticker, df)
+                stock[key] = to_rows(df)
+            stock["daily"] = drop_unfinished_bar(stock["daily"], t["market"])
         except Exception as e:  # noqa: BLE001 - 1銘柄の失敗で全体を止めない
             print(f"[warn] {symbol}: {e}", file=sys.stderr)
             continue
