@@ -48,7 +48,7 @@ jobs:
       id-token: write
     environment:
       name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+      url: ${{ steps.deploy.outputs.page_url || steps.deploy_retry.outputs.page_url }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -57,5 +57,13 @@ jobs:
       - uses: actions/upload-pages-artifact@v4
         with:
           path: docs
+      # Pages の API は一時的に 500 を返すことがある。ジョブの再実行では
+      # 「github-pages」アーティファクトが重複して失敗するため、同じジョブ内で1回だけやり直す。
       - id: deploy
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+      - if: steps.deploy.outcome == 'failure'
+        run: sleep 60
+      - id: deploy_retry
+        if: steps.deploy.outcome == 'failure'
         uses: actions/deploy-pages@v4
