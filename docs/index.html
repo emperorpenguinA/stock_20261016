@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>チャート銘柄ナビ</title>
-  <meta name="description" content="移動平均線・MACD・RSI・ボリンジャーバンド・出来高のチャート分析から、注目銘柄を提案します。">
+  <meta name="description" content="月足・週足のトレンドと、日足のローソク足・移動平均線・出来高の分析から注目銘柄を提案します。">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -54,10 +54,10 @@
                 <th>#</th>
                 <th>銘柄</th>
                 <th>スコア</th>
+                <th title="月足・週足・日足のトレンド">月週日</th>
                 <th class="num">終値</th>
                 <th class="num">前日比</th>
                 <th class="num hide-sm">1ヶ月</th>
-                <th class="num hide-sm">RSI</th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -73,7 +73,14 @@
           </div>
           <div class="detail-score" id="d-score"></div>
         </div>
+        <div class="tcards" id="d-trends"></div>
+        <div class="patterns" id="d-patterns"></div>
         <div class="stats" id="d-stats"></div>
+        <div class="tf-tabs" id="tf-tabs" role="group" aria-label="時間足">
+          <button type="button" data-tf="daily" aria-pressed="true">日足</button>
+          <button type="button" data-tf="weekly" aria-pressed="false">週足</button>
+          <button type="button" data-tf="monthly" aria-pressed="false">月足</button>
+        </div>
         <div class="legend" id="legend"></div>
         <div class="chart" id="chart-main"></div>
         <div class="chart-label">RSI (14)</div>
@@ -97,15 +104,24 @@
 
     <section class="panel how" aria-labelledby="how-title">
       <h2 id="how-title">スコアの仕組み</h2>
-      <p>各銘柄の直近の日足から次のシグナルを判定し、加点・減点した合計を 0〜100 のスコアにしています。50 が中立です。</p>
-      <ul>
-        <li><b>トレンド</b>: 株価と25日線の位置、25日線の向き、移動平均線の並び (5日・25日・75日)、ゴールデンクロス/デッドクロス、1年高値圏</li>
-        <li><b>モメンタム</b>: MACD とシグナルの位置・交差、MACD のゼロライン</li>
-        <li><b>反発/過熱</b>: RSI の売られすぎ・買われすぎ、ボリンジャーバンド ±2σ</li>
-        <li><b>出来高</b>: 20日平均の1.5倍以上の出来高を伴う陽線/陰線</li>
-      </ul>
-      <p>「投資スタイル」を変えると各カテゴリの重みが変わります (順張りはトレンド重視、逆張りは反発シグナル重視)。損切り目安は終値 − 2×ATR、利確目安は終値 + 3×ATR です。</p>
+      <p>次の順番でチャートを確認し、加点・減点した合計を 0〜100 のスコアにしています (50 が中立)。</p>
+      <ol>
+        <li><b>月足・週足で大きなトレンドを確認</b>: 高値・安値の更新 (直近の高値を上抜け = 上昇トレンド、直近の安値を下抜け = 下落トレンド) と中期線 (月足24ヶ月線・週足26週線) の向き。長期のトレンドが上向きなら短期の売買でも勝率が上がりやすい。</li>
+        <li><b>日足のローソク足</b>
+          <ul>
+            <li>2回以上同じ水準で反落した高値を<b>抵抗線</b>、反発した安値を<b>サポートライン</b>とし、その上抜け/割り込み</li>
+            <li><b>ボックス相場</b> (一定の高値と安値の間で上下) を上抜けたら買い、下限を割り込んだら売り</li>
+            <li><b>安値切り上がり</b> (押し目の安値が前回より高い) は上昇の強いサイン</li>
+            <li>長い下ヒゲ (買い支え)・長い上ヒゲ (売り圧力)・大陽線/大陰線</li>
+          </ul>
+        </li>
+        <li><b>移動平均線</b>: 5日線が横ばい〜上向きの中でローソク足が5日線を上抜けたら買い時、横ばい〜下向きの中で下抜けたら売り時。移動平均線の並び (パーフェクトオーダー)、ゴールデン/デッドクロス、上昇トレンド中の25日線付近への押し目。</li>
+        <li><b>出来高</b>: 出来高の多い陽線は上昇、多い陰線は下落の勢いを強める。直近2〜3ヶ月で出来高が最も積み上がった価格帯より株価が上なら上値が軽く、下なら「やれやれ売り」が出やすい。</li>
+        <li><b>補助指標</b>: RSI・MACD・ボリンジャーバンドは参考程度の小さな重みで加味。</li>
+      </ol>
+      <p>移動平均線の期間は、日足 5・25・75日、週足 13・26・52週、月足 12・24・60ヶ月です。損切り目安は直近の安値と「終値 − 2×ATR」の近い方、利確目安は上にある抵抗線 (なければ「終値 + 3×ATR」) です。「投資スタイル」を変えると各カテゴリの重みが変わります。</p>
       <p class="judge"><span class="badge strong-buy">強い買い</span> 70以上 <span class="badge buy">買い</span> 58以上 <span class="badge hold">様子見</span> 42以上 <span class="badge sell">売り</span> 30以上 <span class="badge strong-sell">強い売り</span> 30未満</p>
+      <p class="muted">練習方法: 過去のチャートで実際に上昇した場所を探し、「どこで買ってどこで売るのが理想だったか」を考えると売買ポイントの感覚が身につきます。週足・月足タブで過去の値動きを振り返るのにも使えます。</p>
     </section>
 
     <p class="disclaimer">

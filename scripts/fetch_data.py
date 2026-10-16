@@ -5,7 +5,7 @@
     python scripts/fetch_data.py --demo   # ネットワーク不要のデモデータを生成
 
 指標の計算と銘柄のスコアリングはブラウザ側 (docs/js/analysis.js) で行うため、
-ここでは日足の OHLCV だけを保存する。
+ここでは日足・週足・月足の OHLCV だけを保存する。
 """
 
 from __future__ import annotations
@@ -27,60 +27,85 @@ def load_tickers() -> list[dict]:
     return json.loads(TICKERS_FILE.read_text(encoding="utf-8"))
 
 
-def fetch_real(tickers: list[dict], period: str) -> list[dict]:
+# 時間足ごとの取得期間。月足60ヶ月線・週足52週線が引けるだけの長さを取る。
+INTERVALS = {"daily": ("1d", "1y"), "weekly": ("1wk", "5y"), "monthly": ("1mo", "10y")}
+
+
+def to_rows(df) -> list[list]:
+    df = df.dropna(subset=["Open", "High", "Low", "Close"])
+    return [
+        [
+            idx.strftime("%Y-%m-%d"),
+            round(float(row.Open), 4),
+            round(float(row.High), 4),
+            round(float(row.Low), 4),
+            round(float(row.Close), 4),
+            int(row.Volume) if not math.isnan(row.Volume) else 0,
+        ]
+        for idx, row in df.iterrows()
+    ]
+
+
+def fetch_real(tickers: list[dict]) -> list[dict]:
     import yfinance as yf
 
     results = []
     for t in tickers:
         symbol = t["symbol"]
+        stock = {**t, "currency": "JPY" if t["market"] == "JP" else "USD"}
         try:
-            df = yf.Ticker(symbol).history(period=period, interval="1d", auto_adjust=True)
+            ticker = yf.Ticker(symbol)
+            for key, (interval, period) in INTERVALS.items():
+                stock[key] = to_rows(ticker.history(period=period, interval=interval, auto_adjust=True))
         except Exception as e:  # noqa: BLE001 - 1銘柄の失敗で全体を止めない
             print(f"[warn] {symbol}: {e}", file=sys.stderr)
             continue
-        df = df.dropna(subset=["Open", "High", "Low", "Close"])
-        if df.empty:
+        if not stock["daily"]:
             print(f"[warn] {symbol}: データなし", file=sys.stderr)
             continue
-        bars = [
-            [
-                idx.strftime("%Y-%m-%d"),
-                round(float(row.Open), 4),
-                round(float(row.High), 4),
-                round(float(row.Low), 4),
-                round(float(row.Close), 4),
-                int(row.Volume) if not math.isnan(row.Volume) else 0,
-            ]
-            for idx, row in df.iterrows()
-        ]
-        results.append({**t, "currency": "JPY" if t["market"] == "JP" else "USD", "bars": bars})
-        print(f"[ok] {symbol}: {len(bars)} 本")
+        results.append(stock)
+        print(f"[ok] {symbol}: 日足 {len(stock['daily'])} / 週足 {len(stock['weekly'])} / 月足 {len(stock['monthly'])} 本")
     return results
 
 
-def fetch_demo(tickers: list[dict], days: int = 260) -> list[dict]:
+def aggregate(rows: list[list], key) -> list[list]:
+    out: list[list] = []
+    for d, o, h, l, c, v in rows:
+        k = key(date.fromisoformat(d)).isoformat()
+        if out and out[-1][0] == k:
+            cur = out[-1]
+            cur[2], cur[3], cur[4], cur[5] = max(cur[2], h), min(cur[3], l), c, cur[5] + v
+        else:
+            out.append([k, o, h, l, c, v])
+    return out
+
+
+def fetch_demo(tickers: list[dict], years: int = 10) -> list[dict]:
     """銘柄ごとに異なる値動き (上昇・下降・レンジ) を持つ疑似データ。"""
     results = []
     end = date.today()
     dates: list[date] = []
     d = end
-    while len(dates) < days:
+    while len(dates) < years * 261:
         if d.weekday() < 5:
             dates.append(d)
         d -= timedelta(days=1)
     dates.reverse()
+    n = len(dates)
 
     for i, t in enumerate(tickers):
         rng = random.Random(t["symbol"])
         price = rng.uniform(1000, 9000) if t["market"] == "JP" else rng.uniform(50, 600)
-        drift = rng.uniform(-0.0015, 0.002)
-        vol = rng.uniform(0.01, 0.025)
+        drift = rng.uniform(-0.0004, 0.0008)
+        vol = rng.uniform(0.01, 0.02)
         base_volume = rng.uniform(1e6, 2e7)
-        bars = []
+        rows = []
         for j, day in enumerate(dates):
-            # 途中でトレンドが転換する銘柄も混ぜる
-            if j == days * 2 // 3 and i % 3 == 0:
-                drift = -drift * 1.5
+            # 数ヶ月ごとにトレンドやボックス相場が入れ替わるようにする
+            if j % 120 == 0:
+                drift = rng.choice([1, 1, -1, 0]) * rng.uniform(0.0003, 0.0015)
+            if j == n - 200 and i % 3 == 0:
+                drift = -drift
             ret = drift + rng.gauss(0, vol)
             open_ = price * (1 + rng.gauss(0, vol / 3))
             close = price * (1 + ret)
@@ -88,20 +113,27 @@ def fetch_demo(tickers: list[dict], days: int = 260) -> list[dict]:
             low = min(open_, close) * (1 - abs(rng.gauss(0, vol / 2)))
             volume = int(base_volume * (1 + abs(ret) * 30) * rng.uniform(0.6, 1.4))
             nd = 0 if t["market"] == "JP" else 2
-            bars.append([day.isoformat(), round(open_, nd), round(high, nd), round(low, nd), round(close, nd), volume])
+            rows.append([day.isoformat(), round(open_, nd), round(high, nd), round(low, nd), round(close, nd), volume])
             price = close
-        results.append({**t, "currency": "JPY" if t["market"] == "JP" else "USD", "bars": bars})
+        weekly = aggregate(rows, lambda x: x - timedelta(days=x.weekday()))
+        monthly = aggregate(rows, lambda x: x.replace(day=1))
+        results.append({
+            **t,
+            "currency": "JPY" if t["market"] == "JP" else "USD",
+            "daily": rows[-250:],
+            "weekly": weekly[-261:],
+            "monthly": monthly,
+        })
     return results
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--demo", action="store_true", help="デモデータを生成する")
-    parser.add_argument("--period", default="1y", help="取得期間 (yfinance の period 指定)")
     args = parser.parse_args()
 
     tickers = load_tickers()
-    stocks = fetch_demo(tickers) if args.demo else fetch_real(tickers, args.period)
+    stocks = fetch_demo(tickers) if args.demo else fetch_real(tickers)
     if not stocks:
         sys.exit("1銘柄も取得できませんでした")
 
