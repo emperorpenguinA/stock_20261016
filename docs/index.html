@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>チャート銘柄ナビ</title>
+  <meta name="description" content="移動平均線・MACD・RSI・ボリンジャーバンド・出来高のチャート分析から、注目銘柄を提案します。">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <div>
+        <h1>チャート銘柄ナビ</h1>
+        <p class="sub">テクニカル指標から「いまチャートの形が良い銘柄」を提案します</p>
+      </div>
+      <p class="updated" id="updated"></p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="notice demo" id="demo-notice" hidden>
+      現在表示しているのは<strong>デモ用の疑似データ</strong>です。GitHub Actions の「株価データ更新」ワークフローを実行すると実際の株価に置き換わります。
+    </div>
+
+    <section class="controls" aria-label="絞り込み">
+      <label>市場
+        <select id="market">
+          <option value="ALL">すべて</option>
+          <option value="JP">日本株</option>
+          <option value="US">米国株</option>
+        </select>
+      </label>
+      <label>投資スタイル
+        <select id="style"></select>
+      </label>
+      <label class="grow">検索
+        <input id="search" type="search" placeholder="銘柄名・コード">
+      </label>
+    </section>
+
+    <section aria-labelledby="picks-title">
+      <h2 id="picks-title">今日の注目銘柄</h2>
+      <div class="picks" id="picks"></div>
+    </section>
+
+    <section class="layout">
+      <div class="panel ranking-panel">
+        <h2>スコアランキング</h2>
+        <div class="table-scroll">
+          <table class="ranking" id="ranking">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>銘柄</th>
+                <th>スコア</th>
+                <th class="num">終値</th>
+                <th class="num">前日比</th>
+                <th class="num hide-sm">1ヶ月</th>
+                <th class="num hide-sm">RSI</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel detail-panel" id="detail">
+        <div class="detail-head">
+          <div>
+            <h2 id="d-name">—</h2>
+            <p class="muted" id="d-symbol"></p>
+          </div>
+          <div class="detail-score" id="d-score"></div>
+        </div>
+        <div class="stats" id="d-stats"></div>
+        <div class="legend" id="legend"></div>
+        <div class="chart" id="chart-main"></div>
+        <div class="chart-label">RSI (14)</div>
+        <div class="chart small" id="chart-rsi"></div>
+        <div class="chart-label">MACD (12, 26, 9)</div>
+        <div class="chart small" id="chart-macd"></div>
+        <h3>判断の根拠</h3>
+        <ul class="signals" id="d-signals"></ul>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="csv-title">
+      <h2 id="csv-title">手持ちのCSVで分析する</h2>
+      <p class="muted">一覧にない銘柄も、日足のCSV (列: Date, Open, High, Low, Close, Volume) を読み込めば同じ方法で分析できます。ファイルはブラウザ内だけで処理され、送信されません。</p>
+      <div class="csv-row">
+        <input type="text" id="csv-name" placeholder="銘柄名 (任意)">
+        <input type="file" id="csv-file" accept=".csv,text/csv">
+      </div>
+      <p class="error" id="csv-error" hidden></p>
+    </section>
+
+    <section class="panel how" aria-labelledby="how-title">
+      <h2 id="how-title">スコアの仕組み</h2>
+      <p>各銘柄の直近の日足から次のシグナルを判定し、加点・減点した合計を 0〜100 のスコアにしています。50 が中立です。</p>
+      <ul>
+        <li><b>トレンド</b>: 株価と25日線の位置、25日線の向き、移動平均線の並び (5日・25日・75日)、ゴールデンクロス/デッドクロス、1年高値圏</li>
+        <li><b>モメンタム</b>: MACD とシグナルの位置・交差、MACD のゼロライン</li>
+        <li><b>反発/過熱</b>: RSI の売られすぎ・買われすぎ、ボリンジャーバンド ±2σ</li>
+        <li><b>出来高</b>: 20日平均の1.5倍以上の出来高を伴う陽線/陰線</li>
+      </ul>
+      <p>「投資スタイル」を変えると各カテゴリの重みが変わります (順張りはトレンド重視、逆張りは反発シグナル重視)。損切り目安は終値 − 2×ATR、利確目安は終値 + 3×ATR です。</p>
+      <p class="judge"><span class="badge strong-buy">強い買い</span> 70以上 <span class="badge buy">買い</span> 58以上 <span class="badge hold">様子見</span> 42以上 <span class="badge sell">売り</span> 30以上 <span class="badge strong-sell">強い売り</span> 30未満</p>
+    </section>
+
+    <p class="disclaimer">
+      ※ 本ページはテクニカル分析の学習・参考用であり、特定銘柄の売買を推奨するものではありません。チャート分析は将来の値動きを保証しません。決算や経済ニュースなどファンダメンタルズは考慮していません。投資判断はご自身の責任で行ってください。
+    </p>
+  </main>
+
+  <script src="vendor/lightweight-charts.standalone.production.js"></script>
+  <script src="js/analysis.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
