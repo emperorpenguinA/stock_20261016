@@ -47,12 +47,17 @@
 
     <section class="layout">
       <div class="panel ranking-panel">
-        <h2>スコアランキング</h2>
+        <div class="view-tabs" id="view-tabs" role="tablist" aria-label="一覧の切り替え">
+          <button type="button" role="tab" data-view="ranking" aria-selected="true">スコアランキング</button>
+          <button type="button" role="tab" data-view="watch" aria-selected="false">監視リスト <span id="watch-count"></span></button>
+        </div>
+        <p class="watch-help muted" id="watch-help" hidden></p>
         <div class="table-scroll">
           <table class="ranking" id="ranking">
             <thead>
               <tr>
                 <th>#</th>
+                <th class="star-col"><span class="sr-only">監視</span></th>
                 <th>銘柄</th>
                 <th>スコア</th>
                 <th title="月足・週足・日足のトレンド">月週日</th>
@@ -69,7 +74,7 @@
       <div class="panel detail-panel" id="detail">
         <div class="detail-head">
           <div>
-            <h2 id="d-name">—</h2>
+            <h2><button type="button" class="star big-star" id="d-star" hidden></button><span id="d-name">—</span></h2>
             <p class="muted" id="d-symbol"></p>
           </div>
           <div class="detail-score" id="d-score"></div>
@@ -122,7 +127,7 @@
         <li><b>出来高</b>: 出来高の多い陽線は上昇、多い陰線は下落の勢いを強める。直近2〜3ヶ月で出来高が最も積み上がった価格帯より株価が上なら上値が軽く、下なら「やれやれ売り」が出やすい。</li>
         <li><b>補助指標</b>: RSI・MACD・ボリンジャーバンドは参考程度の小さな重みで加味。</li>
       </ol>
-      <p><b>毎日の確認の順番</b>: まず「5日線突破の初動のみ」で、5日線を上抜けたばかりの銘柄を絞り込みます。そのあとローソク足・出来高・月足・週足を確認します。月足・週足のどちらかが下落トレンドの銘柄は、日足に買いサインが出ても失敗しやすいため「様子見」までにとどめます。次の決算発表まで14日以内の銘柄には「決算」の印を付けます。</p>
+      <p><b>毎日の確認の順番</b>: 気になる銘柄を ☆ で「監視リスト」に入れておき、上から順に確認します。まず「5日線突破の初動のみ」で、5日線を上抜けたばかりの銘柄を絞り込みます。そのあとローソク足・出来高・月足・週足を確認します。月足・週足のどちらかが下落トレンドの銘柄は、日足に買いサインが出ても失敗しやすいため「様子見」までにとどめます。次の決算発表まで14日以内の銘柄には「決算」の印を付けます。</p>
       <p><b>シナリオ</b>: 買う前に、上昇したらどこで利確するか、下落したらどこで損切りするかを決めておきます。特に大事なのは下落シナリオです。詳細欄に両方を表示します。</p>
       <p>移動平均線の期間は、日足 5・25・75日、週足 13・26・52週、月足 12・24・60ヶ月です。損切り目安は直近の安値と「終値 − 2×ATR」の近い方、利確目安は上にある抵抗線 (なければ「終値 + 3×ATR」) です。「投資スタイル」を変えると各カテゴリの重みが変わります。</p>
       <p class="judge"><span class="badge strong-buy">強い買い</span> 80以上 <span class="badge buy">買い</span> 62以上 <span class="badge hold">様子見</span> 40以上 <span class="badge sell">売り</span> 25以上 <span class="badge strong-sell">強い売り</span> 25未満</p>

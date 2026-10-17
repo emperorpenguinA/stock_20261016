@@ -183,3 +183,14 @@ select, input[type="search"], input[type="text"] {
 .scn-h { font-weight: 600; font-size: 0.8rem; }
 .scn-rr { grid-column: 1 / -1; margin: 0; font-size: 0.8rem; }
 @media (max-width: 520px) { .scenario { grid-template-columns: minmax(0, 1fr); } }
+.view-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+.view-tabs button { font: inherit; font-size: 0.95rem; font-weight: 600; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); padding: 4px 10px 8px; cursor: pointer; margin-bottom: -1px; }
+.view-tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+.watch-help { font-size: 0.8rem; margin: 0 0 8px; }
+.star { font: inherit; background: none; border: 0; padding: 0 2px; cursor: pointer; color: var(--muted); font-size: 1.05rem; line-height: 1; }
+.star.on { color: #f59e0b; }
+.star:hover, .star:focus-visible { color: #f59e0b; outline: none; }
+.ranking .star-col { width: 1.6em; padding-left: 0; padding-right: 0; text-align: center; }
+.big-star { font-size: 1.3rem; margin-right: 4px; vertical-align: -2px; }
+.ranking tbody tr.shodou td:first-child { box-shadow: inset 3px 0 0 var(--up); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
