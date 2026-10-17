@@ -365,11 +365,16 @@
 
     // 3) 移動平均線
     const s5 = ind.maShort, s25 = ind.maMid, s75 = ind.maLong;
+    let shodou = null; // 5日線を上抜けた初動 (監視リストで最初に確認するサイン)
     if (s5[L] != null && s5[L - 2] != null) {
       const slope = (s5[L] - s5[L - 2]) / s5[L - 2];
       const crossedUp = close > s5[L] && [1, 2].some((i) => bars[L - i].close <= s5[L - i]);
       const crossedDown = close < s5[L] && [1, 2].some((i) => bars[L - i].close >= s5[L - i]);
-      if (crossedUp && slope >= -0.002) add("ma", 10, "5日線が横ばい〜上向きの中、株価が5日線を上抜け (買い時サイン)");
+      if (crossedUp && slope >= -0.002) {
+        shodou = { barsAgo: bars[L - 1].close <= s5[L - 1] ? 0 : 1 };
+        add("ma", 10, `5日線が横ばい〜上向きの中、株価が5日線を上抜け (買い時サイン・初動${shodou.barsAgo ? "1日目" : "当日"})`);
+        patterns.unshift("5日線突破の初動");
+      }
       else if (crossedDown && slope <= 0.002) add("ma", -10, "5日線が横ばい〜下向きの中、株価が5日線を下抜け (売り時サイン)");
       else if (close > s5[L] && slope > 0) add("ma", 2, "株価が上向きの5日線の上で推移");
       else if (close < s5[L] && slope < 0) add("ma", -2, "株価が下向きの5日線の下で推移");
@@ -422,7 +427,14 @@
       raw += s.weighted;
     }
     // 加点が重なるほど伸びが緩やかになるようにし、100点に張り付かないようにする
-    const score = Math.round(50 + 50 * Math.tanh(raw / 65));
+    let score = Math.round(50 + 50 * Math.tanh(raw / 65));
+    // 月足・週足が下落基調だと、日足の買いサインは失敗しやすい (負けパターン)。「買い」以上は出さない
+    const downTf = ["monthly", "weekly"].filter((k) => tfs[k].trend && tfs[k].trend.enough && tfs[k].trend.dir < 0);
+    let caution = null;
+    if (downTf.length && score >= 62) {
+      score = 61;
+      caution = `${downTf.map((k) => TIMEFRAMES[k].label).join("・")}が下落トレンドのため、日足の買いサインが出ていても「様子見」にとどめています`;
+    }
     const order = Object.keys(CATEGORY_LABELS);
     signals.sort((a, b) => order.indexOf(a.category) - order.indexOf(b.category) || Math.abs(b.weighted) - Math.abs(a.weighted));
 
@@ -432,7 +444,26 @@
     const supportStop = dt.lastLow && dt.lastLow.price < close ? dt.lastLow.price * 0.99 : null;
     const atrStop = atrNow != null ? close - 2 * atrNow : null;
     const stopLoss = supportStop != null && atrStop != null ? Math.max(supportStop, atrStop) : supportStop ?? atrStop;
-    const target = D.levels.resistance ? D.levels.resistance.price : atrNow != null ? close + 3 * atrNow : null;
+    const stopBasis = stopLoss == null ? null : stopLoss === supportStop ? `直近の安値 ${fmt(dt.lastLow.price)} の少し下` : "値動きの幅 (2×ATR) 分の下落";
+    // 上昇シナリオと下落シナリオ。下落時にどこで損切りするかを先に決めておく
+    let trigger = null;
+    if (box && close <= box.upper) trigger = { price: box.upper, text: `ボックス相場の上限 ${fmt(box.upper)} を上抜けたら` };
+    else if (dt.lastHigh && close <= dt.lastHigh.price) trigger = { price: dt.lastHigh.price, text: `直近の高値 ${fmt(dt.lastHigh.price)} を上抜けたら` };
+    else if (shodou) trigger = { price: s5[L], text: `5日線 (${fmt(s5[L])}) の上を保てば` };
+    else trigger = { price: close, text: "高値を更新中。押し目で安値を切り上げれば" };
+    // 利確目安: きっかけの価格より 1ATR 以上上にある最初の抵抗線。なければ きっかけ + 3ATR
+    const unit = atrNow ?? close * 0.02;
+    const nextRes = D.levels.all
+      .filter((l) => l.kind === "resistance" && l.price >= trigger.price + unit)
+      .sort((a, b) => a.price - b.price)[0];
+    const target = nextRes ? nextRes.price : trigger.price + 3 * unit;
+    const targetBasis = nextRes ? `上にある抵抗線 (${nextRes.touches}回反落した水準)` : "値動きの幅 (3×ATR) 分の上昇";
+    const scenario = {
+      up: { ...trigger, target, targetBasis, targetPct: target != null ? pct(target, close) : null },
+      down: { stop: stopLoss, stopBasis, stopPct: stopLoss != null ? pct(stopLoss, close) : null },
+    };
+    scenario.riskReward =
+      scenario.up.targetPct != null && scenario.down.stopPct ? scenario.up.targetPct / Math.abs(scenario.down.stopPct) : null;
 
     return {
       ok: true,
@@ -440,6 +471,9 @@
       rating: rating(score),
       signals,
       patterns,
+      shodou,
+      caution,
+      scenario,
       timeframes: tfs,
       trends: { monthly: tfs.monthly.trend, weekly: tfs.weekly.trend, daily: dt },
       last: {

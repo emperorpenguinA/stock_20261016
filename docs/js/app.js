@@ -3,7 +3,8 @@
 
   const A = window.Analysis;
   const $ = (id) => document.getElementById(id);
-  const state = { stocks: [], results: [], selected: null, style: "standard", market: "ALL", query: "", custom: null, tf: "daily" };
+  const state = { stocks: [], results: [], selected: null, style: "standard", market: "ALL", query: "", shodouOnly: false, custom: null, tf: "daily" };
+  const EARNINGS_WARN_DAYS = 14;
   let charts = [];
 
   // ---- フォーマット ----
@@ -23,6 +24,20 @@
   function trendIcon(t) {
     if (!t || !t.enough) return `<span class="trend none" title="データ不足">―</span>`;
     return t.dir > 0 ? `<span class="trend up" title="上昇">↑</span>` : t.dir < 0 ? `<span class="trend down" title="下落">↓</span>` : `<span class="trend flat" title="もみ合い">→</span>`;
+  }
+  // 次の決算発表日までの日数。決算をまたぐと株価が大きく動くことがある
+  function earningsInfo(stock) {
+    if (!stock.earnings) return null;
+    const today = new Date();
+    const base = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+    const days = Math.round((Date.parse(stock.earnings + "T00:00:00Z") - base) / 86400000);
+    if (days < 0) return null;
+    const [, m, d] = stock.earnings.split("-").map(Number);
+    return { days, label: `${m}/${d}`, near: days <= EARNINGS_WARN_DAYS };
+  }
+  function earningsBadge(stock) {
+    const e = earningsInfo(stock);
+    return e && e.near ? `<span class="tag warn" title="決算発表が近い銘柄">決算 ${e.label}</span>` : "";
   }
   function trendText(t) {
     if (!t || !t.enough) return "データ不足";
@@ -44,8 +59,9 @@
 
   function visibleResults() {
     const q = state.query.trim().toLowerCase();
-    return state.results.filter(({ stock }) =>
+    return state.results.filter(({ stock, result }) =>
       (state.market === "ALL" || stock.market === state.market) &&
+      (!state.shodouOnly || result.shodou) &&
       (!q || stock.name.toLowerCase().includes(q) || stock.symbol.toLowerCase().includes(q))
     );
   }
@@ -73,7 +89,7 @@
         </div>
         <div class="pick-price">${fmtPrice(result.last.close, stock.currency)} <span class="${cls(result.last.changePct)}">${fmtPct(result.last.changePct)}</span> ${badge(result.rating)}</div>
         <div class="pick-trends">月${trendIcon(t.monthly)} 週${trendIcon(t.weekly)} 日${trendIcon(t.daily)}
-          ${result.patterns.map((p) => `<span class="tag">${esc(p)}</span>`).join("")}</div>
+          ${result.patterns.map((p) => `<span class="tag">${esc(p)}</span>`).join("")}${earningsBadge(stock)}</div>
         <ul>${reasons.map((s) => `<li>${esc(s.text)}</li>`).join("")}</ul>
       </button>`;
     }).join("");
@@ -89,7 +105,7 @@
     tbody.innerHTML = rows.map(({ stock, result }, i) => `
       <tr data-symbol="${esc(stock.symbol)}" class="${state.selected === stock.symbol ? "selected" : ""}">
         <td>${i + 1}</td>
-        <td><div class="name">${esc(stock.name)}</div><div class="code">${esc(stock.symbol)}</div></td>
+        <td><div class="name">${esc(stock.name)}</div><div class="code">${esc(stock.symbol)}${result.shodou ? ' <span class="tag">初動</span>' : ""}${earningsBadge(stock)}</div></td>
         <td><div class="scorecell"><b>${result.score}</b>${badge(result.rating)}</div></td>
         <td class="trends">${trendIcon(result.trends.monthly)}${trendIcon(result.trends.weekly)}${trendIcon(result.trends.daily)}</td>
         <td class="num">${fmtPrice(result.last.close, stock.currency)}</td>
@@ -236,6 +252,24 @@
     }).join("");
     $("d-patterns").innerHTML = result.patterns.map((p) => `<span class="tag">${esc(p)}</span>`).join("");
 
+    const alerts = [];
+    if (result.caution) alerts.push(result.caution);
+    const e = earningsInfo(stock);
+    if (e && e.near) alerts.push(`決算発表が近い (${e.label}、あと${e.days}日)。決算の内容次第で株価が大きく動くため、自信がなければ決算をまたがずに売却を検討`);
+    $("d-alerts").innerHTML = alerts.map((a) => `<p class="alert">${esc(a)}</p>`).join("");
+
+    const sc = result.scenario;
+    const cur = stock.currency;
+    const pctTxt = (v) => (v == null ? "" : ` (${fmtPct(v)})`);
+    $("d-scenario").innerHTML = `
+      <div class="scn scn-up"><div class="scn-h">上昇シナリオ</div>
+        <p>${esc(sc.up.text)}上昇を想定。利確目安は <b>${fmtPrice(sc.up.target, cur)}</b>${pctTxt(sc.up.targetPct)}。</p>
+        <p class="muted">根拠: ${esc(sc.up.targetBasis)}</p></div>
+      <div class="scn scn-down"><div class="scn-h">下落シナリオ (損切りライン)</div>
+        <p><b>${fmtPrice(sc.down.stop, cur)}</b>${pctTxt(sc.down.stopPct)} を割り込んだら損切り。</p>
+        <p class="muted">根拠: ${esc(sc.down.stopBasis || "—")}</p></div>
+      ${sc.riskReward != null ? `<p class="scn-rr muted">現在値から見た 利益の見込み ÷ 損失の幅 = <b>${sc.riskReward.toFixed(1)}</b>${sc.riskReward < 1 ? " (損失の幅の方が大きいので慎重に)" : ""}</p>` : ""}`;
+
     const stat = (k, v, c = "") => `<div class="stat"><div class="k">${k}</div><div class="v ${c}">${v}</div></div>`;
     $("d-stats").innerHTML = [
       stat("終値", fmtPrice(L.close, stock.currency)),
@@ -246,6 +280,7 @@
       stat("1年安値", fmtPrice(L.yearLow, stock.currency)),
       stat("損切り目安", fmtPrice(L.stopLoss, stock.currency), "down"),
       stat("利確目安", fmtPrice(L.target, stock.currency), "up"),
+      stat("次の決算", e ? `${e.label} (あと${e.days}日)` : "—", e && e.near ? "down" : ""),
     ].join("");
 
     let lastCat = null;
@@ -280,6 +315,7 @@
     styleSel.addEventListener("change", () => { state.style = styleSel.value; recompute(); renderAll(); });
     $("market").addEventListener("change", (e) => { state.market = e.target.value; renderPicks(); renderRanking(); });
     $("search").addEventListener("input", (e) => { state.query = e.target.value; renderPicks(); renderRanking(); });
+    $("shodou-only").addEventListener("change", (e) => { state.shodouOnly = e.target.checked; renderPicks(); renderRanking(); });
     $("ranking").addEventListener("click", (e) => { const tr = e.target.closest("tr[data-symbol]"); if (tr) select(tr.dataset.symbol, true); });
     $("picks").addEventListener("click", (e) => { const b = e.target.closest("[data-symbol]"); if (b) select(b.dataset.symbol, true); });
     $("tf-tabs").addEventListener("click", (e) => {
