@@ -34,6 +34,7 @@
       <label>投資スタイル
         <select id="style"></select>
       </label>
+      <label class="check"><input type="checkbox" id="shodou-only"> 5日線突破の初動のみ</label>
       <label class="grow">検索
         <input id="search" type="search" placeholder="銘柄名・コード">
       </label>
@@ -75,7 +76,9 @@
         </div>
         <div class="tcards" id="d-trends"></div>
         <div class="patterns" id="d-patterns"></div>
+        <div id="d-alerts"></div>
         <div class="stats" id="d-stats"></div>
+        <div class="scenario" id="d-scenario"></div>
         <div class="tf-tabs" id="tf-tabs" role="group" aria-label="時間足">
           <button type="button" data-tf="daily" aria-pressed="true">日足</button>
           <button type="button" data-tf="weekly" aria-pressed="false">週足</button>
@@ -119,6 +122,8 @@
         <li><b>出来高</b>: 出来高の多い陽線は上昇、多い陰線は下落の勢いを強める。直近2〜3ヶ月で出来高が最も積み上がった価格帯より株価が上なら上値が軽く、下なら「やれやれ売り」が出やすい。</li>
         <li><b>補助指標</b>: RSI・MACD・ボリンジャーバンドは参考程度の小さな重みで加味。</li>
       </ol>
+      <p><b>毎日の確認の順番</b>: まず「5日線突破の初動のみ」で、5日線を上抜けたばかりの銘柄を絞り込みます。そのあとローソク足・出来高・月足・週足を確認します。月足・週足のどちらかが下落トレンドの銘柄は、日足に買いサインが出ても失敗しやすいため「様子見」までにとどめます。次の決算発表まで14日以内の銘柄には「決算」の印を付けます。</p>
+      <p><b>シナリオ</b>: 買う前に、上昇したらどこで利確するか、下落したらどこで損切りするかを決めておきます。特に大事なのは下落シナリオです。詳細欄に両方を表示します。</p>
       <p>移動平均線の期間は、日足 5・25・75日、週足 13・26・52週、月足 12・24・60ヶ月です。損切り目安は直近の安値と「終値 − 2×ATR」の近い方、利確目安は上にある抵抗線 (なければ「終値 + 3×ATR」) です。「投資スタイル」を変えると各カテゴリの重みが変わります。</p>
       <p class="judge"><span class="badge strong-buy">強い買い</span> 80以上 <span class="badge buy">買い</span> 62以上 <span class="badge hold">様子見</span> 40以上 <span class="badge sell">売り</span> 25以上 <span class="badge strong-sell">強い売り</span> 25未満</p>
       <p class="muted">練習方法: 過去のチャートで実際に上昇した場所を探し、「どこで買ってどこで売るのが理想だったか」を考えると売買ポイントの感覚が身につきます。週足・月足タブで過去の値動きを振り返るのにも使えます。</p>

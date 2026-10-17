@@ -92,6 +92,18 @@ def fill_missing_daily(ticker, df):
     return df
 
 
+def next_earnings_date(ticker) -> str | None:
+    """次の決算発表日 (分からなければ None)。決算をまたぐと株価が大きく動くことがあるため表示に使う。"""
+    try:
+        cal = ticker.calendar or {}
+        dates = cal.get("Earnings Date") or []
+    except Exception:  # noqa: BLE001 - 決算日が取れなくても株価の取得は続ける
+        return None
+    today = date.today()
+    upcoming = sorted(d for d in dates if isinstance(d, date) and d >= today)
+    return upcoming[0].isoformat() if upcoming else None
+
+
 def fetch_real(tickers: list[dict]) -> list[dict]:
     import yfinance as yf
 
@@ -107,6 +119,7 @@ def fetch_real(tickers: list[dict]) -> list[dict]:
                     df = fill_missing_daily(ticker, df)
                 stock[key] = to_rows(df)
             stock["daily"] = drop_unfinished_bar(stock["daily"], t["market"])
+            stock["earnings"] = next_earnings_date(ticker)
         except Exception as e:  # noqa: BLE001 - 1銘柄の失敗で全体を止めない
             print(f"[warn] {symbol}: {e}", file=sys.stderr)
             continue
@@ -114,7 +127,7 @@ def fetch_real(tickers: list[dict]) -> list[dict]:
             print(f"[warn] {symbol}: データなし", file=sys.stderr)
             continue
         results.append(stock)
-        print(f"[ok] {symbol}: 日足 {len(stock['daily'])} / 週足 {len(stock['weekly'])} / 月足 {len(stock['monthly'])} 本")
+        print(f"[ok] {symbol}: 日足 {len(stock['daily'])} / 週足 {len(stock['weekly'])} / 月足 {len(stock['monthly'])} 本 / 次の決算 {stock['earnings'] or '不明'}")
     return results
 
 
@@ -173,6 +186,8 @@ def fetch_demo(tickers: list[dict], years: int = 10) -> list[dict]:
             "daily": rows[-250:],
             "weekly": weekly[-261:],
             "monthly": monthly,
+            # 一部の銘柄だけ決算日が近い状態にする
+            "earnings": (end + timedelta(days=rng.randint(2, 60))).isoformat() if i % 2 == 0 else None,
         })
     return results
 
