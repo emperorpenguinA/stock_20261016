@@ -3,7 +3,7 @@
 
   const A = window.Analysis;
   const $ = (id) => document.getElementById(id);
-  const state = { stocks: [], results: [], selected: null, style: "standard", market: "ALL", query: "", shodouOnly: false, custom: null, tf: "daily" };
+  const state = { stocks: [], results: [], selected: null, style: "standard", market: "ALL", query: "", shodouOnly: false, custom: null, tf: "daily", view: "ranking", watch: [] };
   const EARNINGS_WARN_DAYS = 14;
   let charts = [];
 
@@ -42,6 +42,31 @@
   function trendText(t) {
     if (!t || !t.enough) return "データ不足";
     return t.dir > 0 ? "上昇トレンド" : t.dir < 0 ? "下落トレンド" : "もみ合い";
+  }
+
+  // ---- 監視リスト (このブラウザだけに保存) ----
+  const WATCH_KEY = "chart-navi.watchlist";
+  function loadWatch() {
+    try {
+      const v = JSON.parse(localStorage.getItem(WATCH_KEY) || "[]");
+      return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
+    } catch (_) {
+      return [];
+    }
+  }
+  function saveWatch() {
+    try { localStorage.setItem(WATCH_KEY, JSON.stringify(state.watch)); } catch (_) { /* 保存できない環境でも画面上は使える */ }
+  }
+  function isWatched(symbol) { return state.watch.includes(symbol); }
+  function toggleWatch(symbol) {
+    state.watch = isWatched(symbol) ? state.watch.filter((s) => s !== symbol) : [...state.watch, symbol];
+    saveWatch();
+    renderRanking();
+    renderStar();
+  }
+  function starButton(symbol) {
+    const on = isWatched(symbol);
+    return `<button type="button" class="star${on ? " on" : ""}" data-star="${esc(symbol)}" aria-pressed="${on}" title="${on ? "監視リストから外す" : "監視リストに追加"}">${on ? "★" : "☆"}</button>`;
   }
 
   // ---- データ ----
@@ -95,16 +120,40 @@
     }).join("");
   }
 
+  // 監視リストは追加した順に並べる (上から順番に確認する)
+  function watchResults() {
+    const order = new Map(state.watch.map((s, i) => [s, i]));
+    const shown = new Set(visibleResults().map((x) => x.stock.symbol));
+    return state.results
+      .filter((x) => order.has(x.stock.symbol) && shown.has(x.stock.symbol))
+      .sort((a, b) => order.get(a.stock.symbol) - order.get(b.stock.symbol));
+  }
+
   function renderRanking() {
-    const rows = visibleResults();
+    const watchView = state.view === "watch";
+    const rows = watchView ? watchResults() : visibleResults();
+    $("watch-count").textContent = state.watch.length ? `(${state.watch.length})` : "";
+    document.querySelectorAll("#view-tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.view === state.view)));
+    const help = $("watch-help");
+    help.hidden = !watchView;
+    if (watchView) {
+      const shodou = rows.filter((x) => x.result.shodou).length;
+      help.textContent = state.watch.length
+        ? `上から順に、5日線を上抜けた「初動」の銘柄がないか確認しましょう。いま初動の銘柄: ${shodou}件。リストはこのブラウザだけに保存されます。`
+        : "";
+    }
     const tbody = $("ranking").querySelector("tbody");
     if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="7" class="muted">該当する銘柄がありません</td></tr>`;
+      const msg = watchView && !state.watch.length
+        ? "まだ銘柄がありません。スコアランキングや詳細の ☆ を押すと監視リストに追加できます。"
+        : "該当する銘柄がありません";
+      tbody.innerHTML = `<tr><td colspan="8" class="muted">${msg}</td></tr>`;
       return;
     }
     tbody.innerHTML = rows.map(({ stock, result }, i) => `
-      <tr data-symbol="${esc(stock.symbol)}" class="${state.selected === stock.symbol ? "selected" : ""}">
+      <tr data-symbol="${esc(stock.symbol)}" class="${state.selected === stock.symbol ? "selected" : ""}${watchView && result.shodou ? " shodou" : ""}">
         <td>${i + 1}</td>
+        <td class="star-col">${starButton(stock.symbol)}</td>
         <td><div class="name">${esc(stock.name)}</div><div class="code">${esc(stock.symbol)}${result.shodou ? ' <span class="tag">初動</span>' : ""}${earningsBadge(stock)}</div></td>
         <td><div class="scorecell"><b>${result.score}</b>${badge(result.rating)}</div></td>
         <td class="trends">${trendIcon(result.trends.monthly)}${trendIcon(result.trends.weekly)}${trendIcon(result.trends.daily)}</td>
@@ -239,6 +288,7 @@
     const { stock, result } = entry;
     const L = result.last;
     $("d-name").textContent = stock.name;
+    renderStar();
     $("d-symbol").textContent = `${stock.symbol}${stock.market ? " ・ " + (stock.market === "JP" ? "日本株" : stock.market === "US" ? "米国株" : stock.market) : ""} ・ ${L.date} 時点`;
     $("d-score").innerHTML = `<div class="big">${result.score}<small class="muted" style="font-size:.9rem"> /100</small></div>${badge(result.rating)}`;
 
@@ -295,6 +345,20 @@
     renderCharts(stock, result);
   }
 
+  // 詳細欄の ☆ (CSV で読み込んだ銘柄は監視リストに入れられない)
+  function renderStar() {
+    const btn = $("d-star");
+    const entry = state.selected && findEntry(state.selected);
+    const ok = entry && entry !== state.custom;
+    btn.hidden = !ok;
+    if (!ok) return;
+    const on = isWatched(state.selected);
+    btn.textContent = on ? "★" : "☆";
+    btn.classList.toggle("on", on);
+    btn.setAttribute("aria-pressed", String(on));
+    btn.title = on ? "監視リストから外す" : "監視リストに追加";
+  }
+
   function select(symbol, scroll) {
     state.selected = symbol;
     renderRanking();
@@ -316,7 +380,19 @@
     $("market").addEventListener("change", (e) => { state.market = e.target.value; renderPicks(); renderRanking(); });
     $("search").addEventListener("input", (e) => { state.query = e.target.value; renderPicks(); renderRanking(); });
     $("shodou-only").addEventListener("change", (e) => { state.shodouOnly = e.target.checked; renderPicks(); renderRanking(); });
-    $("ranking").addEventListener("click", (e) => { const tr = e.target.closest("tr[data-symbol]"); if (tr) select(tr.dataset.symbol, true); });
+    $("ranking").addEventListener("click", (e) => {
+      const star = e.target.closest("[data-star]");
+      if (star) { toggleWatch(star.dataset.star); return; }
+      const tr = e.target.closest("tr[data-symbol]");
+      if (tr) select(tr.dataset.symbol, true);
+    });
+    $("d-star").addEventListener("click", () => state.selected && toggleWatch(state.selected));
+    $("view-tabs").addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-view]");
+      if (!b) return;
+      state.view = b.dataset.view;
+      renderRanking();
+    });
     $("picks").addEventListener("click", (e) => { const b = e.target.closest("[data-symbol]"); if (b) select(b.dataset.symbol, true); });
     $("tf-tabs").addEventListener("click", (e) => {
       const b = e.target.closest("button[data-tf]");
@@ -348,6 +424,7 @@
   }
 
   async function init() {
+    state.watch = loadWatch();
     bind();
     try {
       const res = await fetch("data/prices.json", { cache: "no-cache" });
