@@ -50,6 +50,7 @@ INFO_KEYS = {
     "forwardEps": "forwardEps",
     "dividendRate": "dividendRate",
     "payoutRatio": "payoutRatio",
+    "shares": "sharesOutstanding",
 }
 
 
@@ -111,22 +112,30 @@ def estimates(t) -> dict:
     return {k: v for k, v in out.items() if v}
 
 
-def fetch_real(tickers: list[dict]) -> list[dict]:
+def fetch_one(tk: dict) -> dict:
+    """1銘柄分の業績。取得に失敗したら例外を投げる。"""
     import yfinance as yf
 
+    t = yf.Ticker(tk["symbol"])
+    rec = {**tk, "currency": "JPY" if tk["market"] == "JP" else "USD"}
+    info = t.info or {}
+    for key, src in INFO_KEYS.items():
+        rec[key] = info.get(src) if key in ("sector", "industry") else num(info.get(src))
+    if not rec.get("sector"):
+        rec["sector"] = tk.get("sector")
+    ms = num(info.get("firstTradeDateMilliseconds"))
+    rec["firstTradeDate"] = datetime.fromtimestamp(ms / 1000, timezone.utc).date().isoformat() if ms else None
+    rec["years"] = annual_rows(t)
+    rec["estimates"] = estimates(t)
+    return rec
+
+
+def fetch_real(tickers: list[dict]) -> list[dict]:
     results = []
     for tk in tickers:
         symbol = tk["symbol"]
-        t = yf.Ticker(symbol)
-        rec = {**tk, "currency": "JPY" if tk["market"] == "JP" else "USD"}
         try:
-            info = t.info or {}
-            for key, src in INFO_KEYS.items():
-                rec[key] = info.get(src) if key in ("sector", "industry") else num(info.get(src))
-            ms = num(info.get("firstTradeDateMilliseconds"))
-            rec["firstTradeDate"] = datetime.fromtimestamp(ms / 1000, timezone.utc).date().isoformat() if ms else None
-            rec["years"] = annual_rows(t)
-            rec["estimates"] = estimates(t)
+            rec = fetch_one(tk)
         except Exception as e:  # noqa: BLE001 - 1銘柄の失敗で全体を止めない
             print(f"[warn] {symbol}: {e}", file=sys.stderr)
             continue

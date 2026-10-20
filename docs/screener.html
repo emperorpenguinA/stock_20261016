@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>全銘柄スクリーニング</title>
+  <meta name="description" content="東証の全銘柄と S&P 500 を、チャートと業績の条件で絞り込みます。">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <div>
+        <h1>チャート銘柄ナビ</h1>
+        <p class="sub">東証の全銘柄と S&amp;P 500 から、チャートと業績の条件で銘柄を探します</p>
+        <nav class="site-nav" aria-label="ページ"><a href="index.html">チャート</a><a href="fundamentals.html">業績 (ファンダメンタルズ)</a><a href="screener.html" aria-current="page">全銘柄スクリーニング</a></nav>
+      </div>
+      <p class="updated" id="updated"></p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="notice demo" id="demo-notice" hidden></div>
+
+    <section class="panel" aria-labelledby="presets-title">
+      <h2 id="presets-title">よく使う条件</h2>
+      <div class="presets" id="presets">
+        <button type="button" data-preset="shodou-growth">初動 × 成長株の基準クリア</button>
+        <button type="button" data-preset="small-growth">小型株 (時価総額500億円以下) × 売上が伸びている × 上昇トレンド</button>
+        <button type="button" data-preset="value-trend">割安 (PER×PBR 15.5以下) × 月足・週足とも上昇</button>
+        <button type="button" data-preset="ipo">上場2年目〜3年目 × 業績良好以上</button>
+        <button type="button" data-preset="reset" class="ghost">条件をリセット</button>
+      </div>
+    </section>
+
+    <section class="panel filters" aria-label="絞り込み">
+      <div class="filter-row">
+        <label>市場
+          <select id="f-seg">
+            <option value="ALL">すべて</option>
+            <option value="プライム">プライム</option>
+            <option value="スタンダード">スタンダード</option>
+            <option value="グロース">グロース</option>
+            <option value="S&amp;P500">米国 (S&amp;P 500)</option>
+          </select>
+        </label>
+        <label>業種
+          <select id="f-sector"><option value="ALL">すべて</option></select>
+        </label>
+        <label class="grow">検索
+          <input id="f-q" type="search" placeholder="銘柄名・コード">
+        </label>
+        <label>並び順
+          <select id="f-sort">
+            <option value="total">チャート + 業績</option>
+            <option value="ts">チャートの点</option>
+            <option value="fs">業績の点</option>
+            <option value="mc-asc">時価総額 (小さい順)</option>
+            <option value="r1">1ヶ月の値上がり率</option>
+            <option value="up">将来株価の上昇余地</option>
+          </select>
+        </label>
+      </div>
+      <div class="filter-row">
+        <fieldset>
+          <legend>チャート</legend>
+          <label class="check"><input type="checkbox" id="f-shodou"> 5日線突破の初動</label>
+          <label class="check"><input type="checkbox" id="f-trend"> 月足・週足とも上昇</label>
+          <label>チャートの点
+            <select id="f-ts">
+              <option value="0">指定なし</option>
+              <option value="62">62以上 (買い)</option>
+              <option value="80">80以上 (強い買い)</option>
+            </select>
+          </label>
+        </fieldset>
+        <fieldset>
+          <legend>業績</legend>
+          <label class="check"><input type="checkbox" id="f-growth"> 成長株の基準クリア</label>
+          <label class="check"><input type="checkbox" id="f-rev"> 売上が伸びている</label>
+          <label class="check"><input type="checkbox" id="f-value"> PER×PBR 15.5以下</label>
+          <label class="check"><input type="checkbox" id="f-small"> 時価総額500億円以下</label>
+          <label class="check"><input type="checkbox" id="f-ipo"> 上場2年目〜3年目</label>
+          <label>業績の点
+            <select id="f-fs">
+              <option value="0">指定なし</option>
+              <option value="55">55以上 (良好)</option>
+              <option value="75">75以上 (有望)</option>
+            </select>
+          </label>
+        </fieldset>
+      </div>
+      <p class="muted count" id="count"></p>
+    </section>
+
+    <section class="panel">
+      <div class="table-scroll">
+        <table class="ranking screener" id="table">
+          <thead>
+            <tr>
+              <th class="star-col"><span class="sr-only">監視</span></th>
+              <th>銘柄</th>
+              <th>チャート</th>
+              <th title="月足・週足・日足のトレンド">月週日</th>
+              <th>業績</th>
+              <th class="num hide-sm">4条件</th>
+              <th class="num hide-sm">PER×PBR</th>
+              <th class="num">時価総額</th>
+              <th class="num hide-sm">1ヶ月</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <button type="button" class="more" id="more" hidden>さらに表示</button>
+    </section>
+
+    <section class="panel how" aria-labelledby="how-title">
+      <h2 id="how-title">使い方とデータについて</h2>
+      <ul>
+        <li>対象は東証のプライム・スタンダード・グロースの内国株式 (日本取引所グループの上場銘柄一覧) と、米国の S&amp;P 500 構成銘柄です。</li>
+        <li>チャートの点は毎日、全銘柄について計算します。採点方法はチャートのページと同じです。</li>
+        <li>業績は、Yahoo への負荷を抑えるため1日に約450銘柄ずつ取り直しています。全銘柄が一巡するまで約10日かかり、それまでは業績が「—」の銘柄があります。PER・PBR・時価総額は毎日の終値で計算し直しています。</li>
+        <li>☆ で監視リストに入れると、チャートのページの「監視リスト」タブで確認できます。気になる銘柄は「チャート」「業績」から詳しく見られます。</li>
+      </ul>
+    </section>
+
+    <p class="disclaimer">
+      ※ 本ページは学習・参考用であり、特定銘柄の売買を推奨するものではありません。データには誤りや遅れが含まれる場合があります。投資判断はご自身の責任で行ってください。
+    </p>
+  </main>
+
+  <script src="js/watchlist.js"></script>
+  <script src="js/screener.js"></script>
+</body>
+</html>
