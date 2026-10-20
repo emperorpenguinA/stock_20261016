@@ -194,3 +194,32 @@ select, input[type="search"], input[type="text"] {
 .big-star { font-size: 1.3rem; margin-right: 4px; vertical-align: -2px; }
 .ranking tbody tr.shodou td:first-child { box-shadow: inset 3px 0 0 var(--up); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---- ページ切り替え ---- */
+.site-nav { display: flex; gap: 4px; margin-top: 10px; flex-wrap: wrap; }
+.site-nav a { font-size: 0.85rem; text-decoration: none; color: var(--muted); padding: 4px 12px; border-radius: 999px; border: 1px solid var(--border); }
+.site-nav a[aria-current="page"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.site-nav a:hover:not([aria-current]) { color: var(--text); border-color: var(--accent); }
+.xlink { color: var(--accent); font-size: 0.85rem; white-space: nowrap; }
+
+/* ---- 業績ページ ---- */
+.cov { font-size: 0.72rem; margin-top: 4px; }
+.future { margin: 0 0 6px; }
+.check-group { margin-bottom: 12px; }
+.check-title { font-size: 0.78rem; font-weight: 600; color: var(--muted); margin-bottom: 2px; }
+.checks { list-style: none; margin: 0; padding: 0; }
+.checks li { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; border-bottom: 1px dashed var(--border); }
+.check-label { font-size: 0.9rem; font-weight: 500; }
+.check-detail { font-size: 0.78rem; line-height: 1.5; }
+.st { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 1.5em; height: 1.5em; border-radius: 50%; font-size: 0.8rem; font-weight: 700; }
+.st-pass { background: var(--buy-bg); color: var(--buy-fg); }
+.st-partial { background: var(--demo-bg); color: var(--text); }
+.st-fail { background: var(--sell-bg); color: var(--sell-fg); }
+.st-unknown { background: var(--hold-bg); color: var(--hold-fg); }
+.st-info { background: transparent; color: var(--muted); border: 1px solid var(--border); font-style: italic; }
+.fin { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.fin th, .fin td { padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.fin thead th { font-weight: 500; color: var(--muted); font-size: 0.78rem; }
+.fin tbody th { text-align: left; font-weight: 500; }
+.fin .yoy { font-size: 0.72rem; }
+code { font-size: 0.85em; background: var(--grid); padding: 0 4px; border-radius: 4px; }

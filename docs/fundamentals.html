@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>業績で選ぶ銘柄</title>
+  <meta name="description" content="売上・利益・EPSの成長、キャッシュフロー、PER×PBR、将来の株価などの業績データから銘柄を評価します。">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <div>
+        <h1>チャート銘柄ナビ</h1>
+        <p class="sub">業績 (ファンダメンタルズ) から「伸びている会社・割安な会社」を探します</p>
+        <nav class="site-nav" aria-label="ページ"><a href="index.html">チャート</a><a href="fundamentals.html" aria-current="page">業績 (ファンダメンタルズ)</a></nav>
+      </div>
+      <p class="updated" id="updated"></p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="notice demo" id="demo-notice" hidden>
+      現在表示しているのは<strong>デモ用の疑似データ</strong>です。GitHub Actions の「株価データ更新」ワークフローを実行すると実際の業績データに置き換わります。
+    </div>
+
+    <section class="controls" aria-label="絞り込み">
+      <label>市場
+        <select id="market">
+          <option value="ALL">すべて</option>
+          <option value="JP">日本株</option>
+          <option value="US">米国株</option>
+        </select>
+      </label>
+      <label>区分
+        <select id="group">
+          <option value="ALL">すべて</option>
+          <option value="主要株">主要株</option>
+          <option value="勉強リスト">勉強リスト</option>
+          <option value="成長株">成長株13</option>
+        </select>
+      </label>
+      <label>条件
+        <select id="cond">
+          <option value="ALL">すべて</option>
+          <option value="select3">4条件のうち3つ以上</option>
+          <option value="growth">成長株の基準をすべてクリア</option>
+          <option value="value">割安 (PER×PBR 15.5以下)</option>
+          <option value="future">将来の株価に20%以上の余地</option>
+        </select>
+      </label>
+      <label class="grow">検索
+        <input id="search" type="search" placeholder="銘柄名・コード">
+      </label>
+    </section>
+
+    <section aria-labelledby="picks-title">
+      <h2 id="picks-title">業績で見た注目銘柄</h2>
+      <div class="picks" id="picks"></div>
+    </section>
+
+    <section class="layout">
+      <div class="panel ranking-panel">
+        <div class="view-tabs" id="view-tabs" role="tablist" aria-label="一覧の切り替え">
+          <button type="button" role="tab" data-view="ranking" aria-selected="true">業績スコア</button>
+          <button type="button" role="tab" data-view="watch" aria-selected="false">監視リスト <span id="watch-count"></span></button>
+        </div>
+        <p class="watch-help muted" id="watch-help" hidden></p>
+        <div class="table-scroll">
+          <table class="ranking" id="ranking">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th class="star-col"><span class="sr-only">監視</span></th>
+                <th>銘柄</th>
+                <th>スコア</th>
+                <th title="銘柄選定の4条件">4条件</th>
+                <th title="売上・営業利益・EPS・配当の3期連続成長">成長</th>
+                <th class="num" title="PER×PBR">PER×PBR</th>
+                <th class="num hide-sm" title="将来の株価の上昇余地">将来</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel detail-panel" id="detail">
+        <div class="detail-head">
+          <div>
+            <h2><button type="button" class="star big-star" id="d-star" hidden></button><span id="d-name">—</span></h2>
+            <p class="muted"><span id="d-symbol"></span> <a id="d-chart-link" class="xlink">チャートを見る →</a></p>
+          </div>
+          <div class="detail-score" id="d-score"></div>
+        </div>
+        <div class="stats" id="d-stats"></div>
+        <div id="d-future"></div>
+        <h3>チェック項目</h3>
+        <div id="d-checks"></div>
+        <h3>決算の推移 (年次)</h3>
+        <div class="table-scroll"><table class="fin" id="d-fin"></table></div>
+      </div>
+    </section>
+
+    <section class="panel how" aria-labelledby="how-title">
+      <h2 id="how-title">評価の仕組み</h2>
+      <p>年次の決算と株価指標から、次の項目を判定します。満たした項目の点数の合計を、<b>判定できた項目だけ</b>で 0〜100 点に換算します。判定できない項目 (データなし) は点数に入れず「未確認」と表示します。</p>
+      <ul>
+        <li><b>銘柄選定の4条件</b>: 上場2年目〜3年目 / 時価総額500億円以下 / オーナー創業社長 / 売上が伸びている</li>
+        <li><b>成長株の基準</b>: 売上高・営業利益・EPS が3期連続で前期比+10%以上、1株配当が3期連続で+2.5%以上</li>
+        <li><b>決算書のチェック</b>: 営業キャッシュフローとフリーキャッシュフローがプラスか。配当性向は参考表示 (成熟企業 40〜60%、成長企業 0〜30% が目安)</li>
+        <li><b>割安かどうか</b>: PER×PBR が15.5以下 (22.5未満は半分の点)。直近が減益の銘柄は割安とみなしません</li>
+        <li><b>将来の株価</b>: 来期のEPS × 今のPER。来期EPSはアナリスト予想、なければ過去のEPS成長率が続くと仮定します。上昇余地20%以上で満点、10%以上で半分</li>
+        <li><b>その他の指標</b>: ROE 10%以上、PEG (PER÷EPS成長率) 1倍以下。自己資本比率・配当利回り・ネットキャッシュ比率は参考表示</li>
+      </ul>
+      <p class="judge"><span class="badge strong-buy">有望</span> 75以上 <span class="badge buy">良好</span> 55以上 <span class="badge hold">普通</span> 40以上 <span class="badge sell">注意</span> 40未満 (判定できた項目が半分未満なら「判定材料不足」)</p>
+      <p class="muted"><b>データについて</b>: 業績は Yahoo Finance から取得しています (最大4期分)。会社四季報の予想や会社の中期経営計画、四半期ごとの進捗率は含まれません。「オーナー創業社長」は自動で判定できないため、<code>config/fundamentals_manual.json</code> に書くと反映されます。気になる銘柄は、決算短信や四季報で数字を確かめてください。</p>
+    </section>
+
+    <p class="disclaimer">
+      ※ 本ページは学習・参考用であり、特定銘柄の売買を推奨するものではありません。データには誤りや遅れが含まれる場合があります。投資判断はご自身の責任で行ってください。
+    </p>
+  </main>
+
+  <script src="js/watchlist.js"></script>
+  <script src="js/fundamentals.js"></script>
+  <script src="js/fund-app.js"></script>
+</body>
+</html>

@@ -15,6 +15,23 @@
 
 > 本ページはテクニカル分析の参考用です。売買を推奨するものではなく、将来の値動きを保証しません。
 
+## 業績 (ファンダメンタルズ) のページ
+
+`fundamentals.html` では、年次の決算と株価指標から銘柄を評価します (ロジックは `docs/js/fundamentals.js`)。満たした項目の点数を、判定できた項目だけで 0〜100 点に換算します。
+
+| 区分 | 項目 |
+| --- | --- |
+| 銘柄選定の4条件 | 上場2年目〜3年目 / 時価総額500億円以下 / オーナー創業社長 / 売上が伸びている |
+| 成長株の基準 | 売上高・営業利益・EPS が3期連続+10%以上、1株配当が3期連続+2.5%以上 |
+| 決算書のチェック | 営業CF・フリーCF がプラス、配当性向 (参考) |
+| 割安かどうか | PER×PBR 15.5以下 (22.5未満は半分)。直近が減益なら対象外 |
+| 将来の株価 | 来期EPS (アナリスト予想、なければ過去の成長率から) × 今のPER |
+| その他 | ROE 10%以上、PEG 1倍以下、自己資本比率・配当利回り・ネットキャッシュ比率 (参考) |
+
+業績データは `scripts/fetch_fundamentals.py` が Yahoo Finance から取得します (最大4期分)。「オーナー創業社長」は自動で判定できないため、`config/fundamentals_manual.json` に `"4058.T": {"ownerCeo": true, "note": "..."}` のように書くと反映されます。監視リストはチャートのページと共通です。
+
+銘柄には `groups` で区分 (主要株 / 勉強リスト / 成長株) を付けており、両ページで絞り込めます。
+
 ## スコアの計算
 
 ロジックは `docs/js/analysis.js` にあります。加点・減点の合計を 0〜100 (50が中立) に変換します。
@@ -54,7 +71,8 @@ Pages を有効にする前にワークフローが動くと、`deploy` ジョ�
 
 ```sh
 pip install -r requirements.txt
-python scripts/fetch_data.py        # 実データを取得 (--demo で疑似データ)
+python scripts/fetch_data.py        # 株価を取得 (--demo で疑似データ)
+python scripts/fetch_fundamentals.py  # 業績を取得 (--demo で疑似データ)
 python -m http.server -d docs 8000  # http://localhost:8000 を開く
 ```
 

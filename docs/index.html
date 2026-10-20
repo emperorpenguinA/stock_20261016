@@ -13,6 +13,7 @@
       <div>
         <h1>チャート銘柄ナビ</h1>
         <p class="sub">テクニカル指標から「いまチャートの形が良い銘柄」を提案します</p>
+        <nav class="site-nav" aria-label="ページ"><a href="index.html" aria-current="page">チャート</a><a href="fundamentals.html">業績 (ファンダメンタルズ)</a></nav>
       </div>
       <p class="updated" id="updated"></p>
     </div>
@@ -29,6 +30,14 @@
           <option value="ALL">すべて</option>
           <option value="JP">日本株</option>
           <option value="US">米国株</option>
+        </select>
+      </label>
+      <label>区分
+        <select id="group">
+          <option value="ALL">すべて</option>
+          <option value="主要株">主要株</option>
+          <option value="勉強リスト">勉強リスト</option>
+          <option value="成長株">成長株13</option>
         </select>
       </label>
       <label>投資スタイル
@@ -75,7 +84,7 @@
         <div class="detail-head">
           <div>
             <h2><button type="button" class="star big-star" id="d-star" hidden></button><span id="d-name">—</span></h2>
-            <p class="muted" id="d-symbol"></p>
+            <p class="muted"><span id="d-symbol"></span> <a id="d-fund-link" class="xlink" hidden>業績を見る →</a></p>
           </div>
           <div class="detail-score" id="d-score"></div>
         </div>
@@ -140,6 +149,7 @@
   </main>
 
   <script src="vendor/lightweight-charts.standalone.production.js"></script>
+  <script src="js/watchlist.js"></script>
   <script src="js/analysis.js"></script>
   <script src="js/app.js"></script>
 </body>
