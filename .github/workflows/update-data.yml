@@ -28,11 +28,15 @@ jobs:
       - run: pip install -r requirements.txt
       - name: 株価を取得
         run: python scripts/fetch_data.py
+      # 業績データの取得に失敗しても、株価の更新と公開は続ける
+      - name: 業績データを取得
+        continue-on-error: true
+        run: python scripts/fetch_fundamentals.py
       - name: データをコミット
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/data/prices.json
+          git add docs/data/prices.json docs/data/fundamentals.json
           git diff --cached --quiet && exit 0
           git commit -m "株価データを更新 ($(date -u +%Y-%m-%d))"
           git pull --rebase origin "${GITHUB_REF_NAME}"

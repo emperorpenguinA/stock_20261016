@@ -3,7 +3,7 @@
 
   const A = window.Analysis;
   const $ = (id) => document.getElementById(id);
-  const state = { stocks: [], results: [], selected: null, style: "standard", market: "ALL", query: "", shodouOnly: false, custom: null, tf: "daily", view: "ranking", watch: [] };
+  const state = { stocks: [], results: [], selected: null, style: "standard", market: "ALL", query: "", shodouOnly: false, group: "ALL", custom: null, tf: "daily", view: "ranking", watch: [] };
   const EARNINGS_WARN_DAYS = 14;
   let charts = [];
 
@@ -45,22 +45,9 @@
   }
 
   // ---- 監視リスト (このブラウザだけに保存) ----
-  const WATCH_KEY = "chart-navi.watchlist";
-  function loadWatch() {
-    try {
-      const v = JSON.parse(localStorage.getItem(WATCH_KEY) || "[]");
-      return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
-    } catch (_) {
-      return [];
-    }
-  }
-  function saveWatch() {
-    try { localStorage.setItem(WATCH_KEY, JSON.stringify(state.watch)); } catch (_) { /* 保存できない環境でも画面上は使える */ }
-  }
   function isWatched(symbol) { return state.watch.includes(symbol); }
   function toggleWatch(symbol) {
-    state.watch = isWatched(symbol) ? state.watch.filter((s) => s !== symbol) : [...state.watch, symbol];
-    saveWatch();
+    state.watch = Watchlist.toggle(state.watch, symbol);
     renderRanking();
     renderStar();
   }
@@ -87,6 +74,7 @@
     return state.results.filter(({ stock, result }) =>
       (state.market === "ALL" || stock.market === state.market) &&
       (!state.shodouOnly || result.shodou) &&
+      (state.group === "ALL" || (stock.groups || []).includes(state.group)) &&
       (!q || stock.name.toLowerCase().includes(q) || stock.symbol.toLowerCase().includes(q))
     );
   }
@@ -289,6 +277,9 @@
     const L = result.last;
     $("d-name").textContent = stock.name;
     renderStar();
+    const fl = $("d-fund-link");
+    fl.hidden = entry === state.custom;
+    fl.href = `fundamentals.html#${encodeURIComponent(stock.symbol)}`;
     $("d-symbol").textContent = `${stock.symbol}${stock.market ? " ・ " + (stock.market === "JP" ? "日本株" : stock.market === "US" ? "米国株" : stock.market) : ""} ・ ${L.date} 時点`;
     $("d-score").innerHTML = `<div class="big">${result.score}<small class="muted" style="font-size:.9rem"> /100</small></div>${badge(result.rating)}`;
 
@@ -379,6 +370,7 @@
     styleSel.addEventListener("change", () => { state.style = styleSel.value; recompute(); renderAll(); });
     $("market").addEventListener("change", (e) => { state.market = e.target.value; renderPicks(); renderRanking(); });
     $("search").addEventListener("input", (e) => { state.query = e.target.value; renderPicks(); renderRanking(); });
+    $("group").addEventListener("change", (e) => { state.group = e.target.value; renderPicks(); renderRanking(); });
     $("shodou-only").addEventListener("change", (e) => { state.shodouOnly = e.target.checked; renderPicks(); renderRanking(); });
     $("ranking").addEventListener("click", (e) => {
       const star = e.target.closest("[data-star]");
@@ -424,7 +416,7 @@
   }
 
   async function init() {
-    state.watch = loadWatch();
+    state.watch = Watchlist.load();
     bind();
     try {
       const res = await fetch("data/prices.json", { cache: "no-cache" });
@@ -445,7 +437,10 @@
       return;
     }
     recompute();
-    if (state.results.length) state.selected = state.results[0].stock.symbol;
+    // index.html#7203.T のようにリンクされたら、その銘柄を開く
+    const fromHash = decodeURIComponent(location.hash.slice(1));
+    if (fromHash && state.results.some((x) => x.stock.symbol === fromHash)) state.selected = fromHash;
+    else if (state.results.length) state.selected = state.results[0].stock.symbol;
     renderAll();
   }
 
