@@ -3,7 +3,7 @@
 
   const F = window.Fundamentals;
   const $ = (id) => document.getElementById(id);
-  const state = { stocks: [], results: [], selected: null, market: "ALL", group: "ALL", cond: "ALL", query: "", view: "ranking", watch: [] };
+  const state = { stocks: [], results: [], selected: null, market: "ALL", group: "ALL", cond: "ALL", query: "", view: "ranking", watch: [], extra: new Map(), missing: new Set() };
 
   const STATUS = {
     pass: { icon: "✓", cls: "st-pass", label: "満たす" },
@@ -52,7 +52,32 @@
   }
   function watchResults() {
     const order = new Map(state.watch.map((s, i) => [s, i]));
-    return visibleResults().filter((x) => order.has(x.stock.symbol)).sort((a, b) => order.get(a.stock.symbol) - order.get(b.stock.symbol));
+    const q = state.query.trim().toLowerCase();
+    const extras = [...state.extra.values()].filter((r) => order.has(r.stock.symbol) &&
+      (state.market === "ALL" || r.stock.market === state.market) && matchesCond(r) &&
+      (!q || r.stock.name.toLowerCase().includes(q) || r.stock.symbol.toLowerCase().includes(q)));
+    return visibleResults().filter((x) => order.has(x.stock.symbol)).concat(extras)
+      .sort((a, b) => order.get(a.stock.symbol) - order.get(b.stock.symbol));
+  }
+
+  function findEntry(symbol) {
+    return state.results.find((x) => x.stock.symbol === symbol) || state.extra.get(symbol);
+  }
+
+  // 主要50銘柄以外は、全銘柄スクリーニングで作った個別の業績データを読み込む
+  async function loadExtra(symbol) {
+    if (findEntry(symbol)) return true;
+    try {
+      const res = await fetch(`data/fund/${encodeURIComponent(symbol)}.json`, { cache: "no-cache" });
+      if (!res.ok) throw new Error(res.status);
+      const rec = await res.json();
+      state.extra.set(symbol, { stock: { ...rec, extra: true }, result: F.evaluate(rec) });
+      state.missing.delete(symbol);
+      return true;
+    } catch (_) {
+      state.missing.add(symbol);
+      return false;
+    }
   }
 
   function starButton(symbol) {
@@ -94,7 +119,11 @@
     $("watch-help").hidden = !watchView;
     $("watch-help").textContent = watchView ? "監視リストはチャートのページと共通です。ここで業績の良い銘柄を入れておき、チャートのページで買い時 (5日線突破の初動) を待ちましょう。" : "";
     const tbody = $("ranking").querySelector("tbody");
-    if (!rows.length) {
+    const missingRows = watchView
+      ? state.watch.filter((s) => state.missing.has(s)).map((s) => `<tr class="missing"><td>—</td><td class="star-col">${starButton(s)}</td>
+        <td><div class="name">${esc(s)}</div></td><td colspan="5" class="muted">業績データなし (まだ取得していないか、取得できませんでした)</td></tr>`).join("")
+      : "";
+    if (!rows.length && !missingRows) {
       const msg = watchView && !state.watch.length ? "まだ銘柄がありません。☆ を押すと監視リストに追加できます。" : "該当する銘柄がありません";
       tbody.innerHTML = `<tr><td colspan="8" class="muted">${msg}</td></tr>`;
       return;
@@ -111,7 +140,7 @@
         <td class="num">${m.pp != null ? m.pp.toFixed(1) : "—"}</td>
         <td class="num hide-sm ${result.future ? cls(result.future.upside) : ""}">${result.future ? pct(result.future.upside, 0) : "—"}</td>
       </tr>`;
-    }).join("");
+    }).join("") + missingRows;
   }
 
   function renderStar() {
@@ -126,7 +155,7 @@
   }
 
   function renderDetail() {
-    const entry = state.results.find((x) => x.stock.symbol === state.selected);
+    const entry = findEntry(state.selected);
     if (!entry) return;
     const { stock, result } = entry;
     const m = result.metrics;
@@ -254,8 +283,13 @@
       .map((s) => ({ stock: s, result: F.evaluate(s) }))
       .sort((a, b) => (b.result.score ?? -1) - (a.result.score ?? -1));
     const fromHash = decodeURIComponent(location.hash.slice(1));
-    state.selected = state.results.some((x) => x.stock.symbol === fromHash) ? fromHash : state.results[0] && state.results[0].stock.symbol;
+    state.selected = fromHash && (await loadExtra(fromHash)) ? fromHash : state.results[0] && state.results[0].stock.symbol;
     renderAll();
+    const others = state.watch.filter((s) => !findEntry(s));
+    for (let i = 0; i < others.length; i += 6) {
+      await Promise.all(others.slice(i, i + 6).map(loadExtra));
+      renderRanking();
+    }
   }
 
   init();

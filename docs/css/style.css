@@ -223,3 +223,24 @@ select, input[type="search"], input[type="text"] {
 .fin tbody th { text-align: left; font-weight: 500; }
 .fin .yoy { font-size: 0.72rem; }
 code { font-size: 0.85em; background: var(--grid); padding: 0 4px; border-radius: 4px; }
+
+/* ---- 全銘柄スクリーニング ---- */
+.presets { display: flex; flex-wrap: wrap; gap: 8px; }
+.presets button, .more {
+  font: inherit; font-size: 0.85rem; cursor: pointer; color: var(--text); background: var(--surface);
+  border: 1px solid var(--accent); border-radius: 999px; padding: 6px 14px;
+}
+.presets button:hover, .more:hover { background: var(--accent); color: #fff; }
+.presets .ghost { border-color: var(--border); color: var(--muted); }
+.filters .filter-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; align-items: flex-end; }
+.filters label { display: flex; flex-direction: column; font-size: 0.8rem; color: var(--muted); gap: 4px; }
+.filters label.grow { flex: 1; min-width: 180px; }
+.filters label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--text); font-size: 0.85rem; padding-bottom: 6px; }
+.filters fieldset { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px 4px; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: flex-end; flex: 1 1 320px; }
+.filters legend { font-size: 0.78rem; font-weight: 600; color: var(--muted); padding: 0 4px; }
+.count { margin: 0; }
+.more { display: block; margin: 14px auto 0; }
+.screener td.links { white-space: nowrap; font-size: 0.8rem; }
+.screener td.links a { color: var(--accent); margin-left: 6px; }
+.ranking tr.missing td { color: var(--muted); }
+@media (min-width: 521px) { .screener .hide-sm { display: table-cell; } }

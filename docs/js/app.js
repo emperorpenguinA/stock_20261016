@@ -3,7 +3,7 @@
 
   const A = window.Analysis;
   const $ = (id) => document.getElementById(id);
-  const state = { stocks: [], results: [], selected: null, style: "standard", market: "ALL", query: "", shodouOnly: false, group: "ALL", custom: null, tf: "daily", view: "ranking", watch: [] };
+  const state = { stocks: [], results: [], selected: null, style: "standard", market: "ALL", query: "", shodouOnly: false, group: "ALL", custom: null, tf: "daily", view: "ranking", watch: [], extra: new Map(), missing: new Set() };
   const EARNINGS_WARN_DAYS = 14;
   let charts = [];
 
@@ -67,6 +67,26 @@
       .filter((x) => x.result.ok)
       .sort((a, b) => b.result.score - a.result.score);
     if (state.custom) state.custom.result = A.analyze(state.custom.stock.data, state.style);
+    for (const x of state.extra.values()) x.result = A.analyze(x.stock.data, state.style);
+  }
+
+  // 主要50銘柄以外 (全銘柄スクリーニングや監視リストから来た銘柄) は、必要なときに個別のデータを読み込む
+  async function loadExtra(symbol) {
+    if (state.extra.has(symbol) || state.results.some((x) => x.stock.symbol === symbol)) return true;
+    try {
+      const res = await fetch(`data/stocks/${encodeURIComponent(symbol)}.json`, { cache: "no-cache" });
+      if (!res.ok) throw new Error(res.status);
+      const s = await res.json();
+      const stock = { ...s, extra: true, data: { daily: toBars(s.daily), weekly: toBars(s.weekly), monthly: toBars(s.monthly) } };
+      const result = A.analyze(stock.data, state.style);
+      if (!result.ok) throw new Error(result.error);
+      state.extra.set(symbol, { stock, result });
+      state.missing.delete(symbol);
+      return true;
+    } catch (_) {
+      state.missing.add(symbol);
+      return false;
+    }
   }
 
   function visibleResults() {
@@ -81,7 +101,7 @@
 
   function findEntry(symbol) {
     if (state.custom && state.custom.stock.symbol === symbol) return state.custom;
-    return state.results.find((x) => x.stock.symbol === symbol);
+    return state.results.find((x) => x.stock.symbol === symbol) || state.extra.get(symbol);
   }
 
   // ---- 描画: 注目銘柄・ランキング ----
@@ -112,8 +132,16 @@
   function watchResults() {
     const order = new Map(state.watch.map((s, i) => [s, i]));
     const shown = new Set(visibleResults().map((x) => x.stock.symbol));
+    // 個別に読み込んだ銘柄は、市場・区分・初動・検索の条件だけ当てはめる
+    const q = state.query.trim().toLowerCase();
+    const extraOk = ({ stock, result }) =>
+      (state.market === "ALL" || stock.market === state.market) &&
+      (!state.shodouOnly || result.shodou) &&
+      (state.group === "ALL" || (stock.groups || []).includes(state.group)) &&
+      (!q || stock.name.toLowerCase().includes(q) || stock.symbol.toLowerCase().includes(q));
     return state.results
       .filter((x) => order.has(x.stock.symbol) && shown.has(x.stock.symbol))
+      .concat([...state.extra.values()].filter((x) => order.has(x.stock.symbol) && extraOk(x)))
       .sort((a, b) => order.get(a.stock.symbol) - order.get(b.stock.symbol));
   }
 
@@ -131,7 +159,17 @@
         : "";
     }
     const tbody = $("ranking").querySelector("tbody");
-    if (!rows.length) {
+    // 監視リストに入れたのにデータが無い銘柄は、消さずに「データなし」と表示する
+    const missingRows = watchView
+      ? state.watch.filter((s) => state.missing.has(s)).map((s) => `
+      <tr class="missing">
+        <td>—</td>
+        <td class="star-col">${starButton(s)}</td>
+        <td><div class="name">${esc(s)}</div></td>
+        <td colspan="5" class="muted">データなし (取得できませんでした。銘柄が上場廃止になったか、一時的に取得に失敗した可能性があります)</td>
+      </tr>`).join("")
+      : "";
+    if (!rows.length && !missingRows) {
       const msg = watchView && !state.watch.length
         ? "まだ銘柄がありません。スコアランキングや詳細の ☆ を押すと監視リストに追加できます。"
         : "該当する銘柄がありません";
@@ -148,7 +186,7 @@
         <td class="num">${fmtPrice(result.last.close, stock.currency)}</td>
         <td class="num ${cls(result.last.changePct)}">${fmtPct(result.last.changePct)}</td>
         <td class="num hide-sm ${cls(result.last.ret1m)}">${fmtPct(result.last.ret1m)}</td>
-      </tr>`).join("");
+      </tr>`).join("") + missingRows;
   }
 
   // ---- 描画: 詳細チャート ----
@@ -437,11 +475,17 @@
       return;
     }
     recompute();
-    // index.html#7203.T のようにリンクされたら、その銘柄を開く
+    // index.html#7203.T のようにリンクされたら、その銘柄を開く (主要50銘柄以外なら個別に読み込む)
     const fromHash = decodeURIComponent(location.hash.slice(1));
-    if (fromHash && state.results.some((x) => x.stock.symbol === fromHash)) state.selected = fromHash;
+    if (fromHash && (await loadExtra(fromHash))) state.selected = fromHash;
     else if (state.results.length) state.selected = state.results[0].stock.symbol;
     renderAll();
+    // 監視リストの銘柄のうち主要50銘柄以外を、裏で読み込む
+    const others = state.watch.filter((s) => !findEntry(s));
+    for (let i = 0; i < others.length; i += 6) {
+      await Promise.all(others.slice(i, i + 6).map(loadExtra));
+      renderRanking();
+    }
   }
 
   init();

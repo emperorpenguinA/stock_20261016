@@ -42,10 +42,56 @@ jobs:
           git pull --rebase origin "${GITHUB_REF_NAME}"
           git push origin "HEAD:${GITHUB_REF_NAME}"
 
+  # 東証の全銘柄 + S&P 500 のスクリーニング用データを作る (リポジトリにはコミットしない)
+  # 失敗しても公開は続け、その場合は前回作ったデータを使う
+  screen:
+    needs: update
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: pip install -r requirements.txt
+      # 業績は1日に少しずつ取り直すため、前回までの取得結果を引き継ぐ
+      - name: 業績のキャッシュを復元
+        uses: actions/cache/restore@v4
+        with:
+          path: fund-cache
+          key: fund-cache-${{ github.run_id }}
+          restore-keys: fund-cache-
+      - name: 銘柄一覧を取得
+        run: python scripts/build_universe.py universe.json
+      - name: 全銘柄の株価と業績を取得
+        run: python scripts/screen_all.py universe.json screen-out/data fund-cache --fund-limit 450 --fund-minutes 30
+      - name: 一覧データを作成
+        run: node scripts/summarize_screen.js screen-out/data
+      - name: 業績のキャッシュを保存
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: fund-cache
+          key: fund-cache-${{ github.run_id }}
+      - name: スクリーニング結果を保存
+        uses: actions/cache/save@v4
+        with:
+          path: screen-out
+          key: screen-out-${{ github.run_id }}
+
   # docs/ を GitHub Pages に公開する
   # (リポジトリの Settings → Pages → Source を「GitHub Actions」にしておく必要がある)
   deploy:
-    needs: update
+    needs: [update, screen]
+    if: always() && needs.update.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -57,6 +103,16 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.ref_name }}
+      # 最新のスクリーニング結果 (今回失敗していれば前回のもの) を docs/data/ に加える
+      - name: スクリーニング結果を復元
+        uses: actions/cache/restore@v4
+        with:
+          path: screen-out
+          key: screen-out-${{ github.run_id }}
+          restore-keys: screen-out-
+      - name: スクリーニング結果を公開用フォルダに入れる
+        run: |
+          if [ -d screen-out/data ]; then cp -r screen-out/data/. docs/data/; ls docs/data | head; else echo "スクリーニング結果がまだありません"; fi
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
